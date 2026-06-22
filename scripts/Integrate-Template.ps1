@@ -143,6 +143,33 @@ target_sources(
         Write-Warning "  * target_sources(...) lists the four src/*.cpp files"
     }
 
+    # --- 5. Restore exec bits / symlinks lost during the Windows copy -----
+    # build-aux/run-* are symlinks to .run-format.zsh, and several CI shell
+    # scripts must be executable. Copy-Item drops both, which breaks the
+    # Linux/macOS builds and the format checks (exit 126). Fix them in the git
+    # index (safe: core.fileMode/symlinks are false on Windows, so a later
+    # `git add` will not revert these). Requires an initialized git repo.
+    $inRepo = $false
+    try { $inRepo = (git rev-parse --is-inside-work-tree 2>$null) -eq "true" } catch {}
+    if ($inRepo) {
+        git add build-aux .github/scripts 2>$null | Out-Null
+        $execFiles = @(
+            "build-aux/.run-format.zsh",
+            ".github/scripts/build-macos", ".github/scripts/build-ubuntu",
+            ".github/scripts/package-macos", ".github/scripts/package-ubuntu"
+        )
+        foreach ($f in $execFiles) {
+            if (Test-Path (Join-Path $repoRoot $f)) { git update-index --chmod=+x $f 2>$null }
+        }
+        foreach ($f in @("build-aux/run-clang-format", "build-aux/run-gersemi", "build-aux/run-swift-format")) {
+            $blob = (git rev-parse ":$f" 2>$null)
+            if ($blob) { git update-index --cacheinfo "120000,$blob,$f" 2>$null }
+        }
+        Write-Host "Restored exec bits / symlinks for CI scripts in the git index"
+    } else {
+        Write-Warning "Not a git repo yet. Run 'git init' FIRST, then re-run this script (or apply the CI-script mode fixes manually) so Linux/macOS CI and format checks pass."
+    }
+
     Write-Host ""
     Write-Host "Integration complete. Next:" -ForegroundColor Green
     Write-Host "  cmake --preset windows-x64"

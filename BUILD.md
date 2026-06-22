@@ -16,22 +16,23 @@ OBS 原始碼與 Qt6 都是**免費、開源、可直接下載**的,不需要任
 
 1. 註冊一個免費 [GitHub](https://github.com) 帳號。
 2. 在本機安裝 [Git](https://git-scm.com/download/win)(只需要這個)。
-3. 在本專案資料夾把模板建置系統拉進來(會自動下載 OBS/Qt 的設定,真正下載發生在 CI 上):
+3. **先**初始化 git(讓下一步能修正 CI 腳本的執行權限/symlink):
+   ```powershell
+   git init -b main
+   ```
+4. 把模板建置系統拉進來(會自動下載 OBS/Qt 的設定,真正下載發生在 CI 上):
    ```powershell
    pwsh ./scripts/Integrate-Template.ps1
    ```
-   這會把模板的 `cmake/`、`.github/`(CI 設定)、`CMakePresets.json`、`buildspec.json` 等複製進來,並自動改好我們的外掛名稱與原始碼清單。
-4. 建立一個 GitHub repo 並推上去:
+   這會複製模板的 `cmake/`、`.github/`(CI 設定)、`build-aux/`、`CMakePresets.json`、`buildspec.json` 等,自動改好外掛名稱/原始碼清單,並修正在 Windows 複製時會掉失的執行權限與 symlink(否則 Linux/macOS 建置與格式檢查會 exit 126)。
+5. 建立 GitHub repo 並推上去(`gh` CLI 一行搞定,或在網站手動開 repo 再 `git remote add`):
    ```powershell
-   git init
-   git add .
+   git add -A
    git commit -m "Initial commit: obs-auto-resize-output"
-   git branch -M main
-   git remote add origin https://github.com/<你的帳號>/obs-auto-resize-output.git
-   git push -u origin main
+   gh repo create obs-auto-resize-output --public --source=. --remote=origin --push
    ```
-5. 打開 GitHub repo 的 **Actions** 分頁 → 等綠色勾完成 → 進入該次 run → 在 **Artifacts** 下載 Windows 的 zip,裡面就是編好的 `obs-auto-resize-output.dll`(+ `data/`)。
-6. 跳到本文件最後的「**安裝到 OBS**」。
+6. 打開 GitHub repo 的 **Actions** 分頁 → 等綠色勾完成 → 進入該次 run → 在 **Artifacts** 下載 Windows 的 zip,裡面就是編好的 `obs-auto-resize-output.dll`(+ `data/`)。
+7. 跳到本文件最後的「**安裝到 OBS**」。
 
 > 之後每次改程式碼 `git push`,CI 會自動重編,你只要下載新 artifact。
 
