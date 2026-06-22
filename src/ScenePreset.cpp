@@ -21,6 +21,7 @@ ScenePreset preset_load(obs_source_t *scene)
 		obs_data_set_default_int(d, "output_cy", p.output_cy);
 		obs_data_set_default_int(d, "fps", p.fps);
 		obs_data_set_default_int(d, "audio_tracks", p.audio_tracks);
+		obs_data_set_default_int(d, "rec_bitrate", p.rec_bitrate);
 
 		p.enabled = obs_data_get_bool(d, "enabled");
 
@@ -43,6 +44,9 @@ ScenePreset preset_load(obs_source_t *scene)
 
 		p.use_audio_tracks = obs_data_get_bool(d, "use_audio_tracks");
 		p.audio_tracks = (uint32_t)obs_data_get_int(d, "audio_tracks");
+
+		p.use_rec_bitrate = obs_data_get_bool(d, "use_rec_bitrate");
+		p.rec_bitrate = (uint32_t)obs_data_get_int(d, "rec_bitrate");
 
 		p.restart_recording = obs_data_get_bool(d, "restart_recording");
 
@@ -81,6 +85,9 @@ void preset_save(obs_source_t *scene, const ScenePreset &p)
 
 	obs_data_set_bool(d, "use_audio_tracks", p.use_audio_tracks);
 	obs_data_set_int(d, "audio_tracks", p.audio_tracks);
+
+	obs_data_set_bool(d, "use_rec_bitrate", p.use_rec_bitrate);
+	obs_data_set_int(d, "rec_bitrate", p.rec_bitrate);
 
 	obs_data_set_bool(d, "restart_recording", p.restart_recording);
 

@@ -82,6 +82,18 @@ try {
         Write-Host "Patched buildspec.json (name=$PluginName version=$Version)"
     }
 
+    # --- 3b. Enable Qt + frontend API in CMakePresets.json ----------------
+    # The base preset's cacheVariables set these to false, which overrides the
+    # option() defaults in CMakeLists.txt. Flip them to true.
+    $cpPath = Join-Path $repoRoot "CMakePresets.json"
+    if (Test-Path $cpPath) {
+        $cp = Get-Content $cpPath -Raw
+        $cp = $cp -replace '"ENABLE_FRONTEND_API"\s*:\s*false', '"ENABLE_FRONTEND_API": true'
+        $cp = $cp -replace '"ENABLE_QT"\s*:\s*false', '"ENABLE_QT": true'
+        Set-Content $cpPath $cp -Encoding UTF8
+        Write-Host "Patched CMakePresets.json (ENABLE_QT/ENABLE_FRONTEND_API = true)"
+    }
+
     # --- 4. Patch the template CMakeLists.txt -----------------------------
     $cmPath = Join-Path $repoRoot "CMakeLists.txt"
     $cm = Get-Content $cmPath -Raw

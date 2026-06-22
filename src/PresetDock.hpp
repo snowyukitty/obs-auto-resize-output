@@ -75,6 +75,8 @@ private:
 	QComboBox *m_recFormat = nullptr;
 	QCheckBox *m_useAudioTracks = nullptr;
 	QCheckBox *m_track[6] = {};
+	QCheckBox *m_useRecBitrate = nullptr;
+	QSpinBox *m_recBitrate = nullptr;
 
 	QCheckBox *m_restartRecording = nullptr;
 

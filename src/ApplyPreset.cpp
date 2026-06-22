@@ -73,6 +73,48 @@ static void apply_recording_config(const ScenePreset &p)
 	}
 }
 
+// Recording video bitrate. In Advanced output mode the recording encoder's
+// settings live in <profile>/recordEncoder.json; OBS reads that file when it
+// builds the recording output at "Start Recording". We set a CBR bitrate there
+// so it applies to the next recording. Simple mode has no separate recording
+// bitrate (it shares the stream encoder), so we skip it rather than mutate
+// streaming settings behind the user's back.
+static void apply_recording_bitrate(const ScenePreset &p)
+{
+	if (!p.use_rec_bitrate)
+		return;
+
+	config_t *cfg = obs_frontend_get_profile_config();
+	const char *mode = cfg ? config_get_string(cfg, "Output", "Mode")
+			       : nullptr;
+	const bool advanced = mode && strcmp(mode, "Advanced") == 0;
+	if (!advanced) {
+		ARO_LOG(LOG_WARNING,
+			"Recording bitrate override needs Advanced output mode; ignored in Simple mode");
+		return;
+	}
+
+	char *profile_path = obs_frontend_get_current_profile_path();
+	if (!profile_path)
+		return;
+	const std::string path =
+		std::string(profile_path) + "/recordEncoder.json";
+	bfree(profile_path);
+
+	// Preserve any existing encoder settings; only override rate control.
+	obs_data_t *enc = obs_data_create_from_json_file(path.c_str());
+	if (!enc)
+		enc = obs_data_create();
+	obs_data_set_string(enc, "rate_control", "CBR");
+	obs_data_set_int(enc, "bitrate", p.rec_bitrate);
+	obs_data_save_json_safe(enc, path.c_str(), "tmp", "bak");
+	obs_data_release(enc);
+
+	ARO_LOG(LOG_INFO,
+		"Set recording encoder to CBR %u kbps for upcoming recordings",
+		p.rec_bitrate);
+}
+
 // ---------------------------------------------------------------------------
 // Video (obs_reset_video)
 // ---------------------------------------------------------------------------
@@ -171,6 +213,7 @@ void aro_apply_preset_for_scene(obs_source_t *scene)
 
 	// Recording config can always be staged for the next recording.
 	apply_recording_config(p);
+	apply_recording_bitrate(p);
 
 	const VideoApplyResult vr = apply_video(p);
 
@@ -228,8 +271,9 @@ void aro_on_recording_stopped()
 		return;
 
 	const ScenePreset p = preset_load(scene);
-	apply_video(p);            // pipeline is now idle
-	apply_recording_config(p); // re-assert in case anything reset it
+	apply_video(p);             // pipeline is now idle
+	apply_recording_config(p);  // re-assert in case anything reset it
+	apply_recording_bitrate(p);
 	obs_source_release(scene);
 
 	// Begin a new recording with the applied settings.

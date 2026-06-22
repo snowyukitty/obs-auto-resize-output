@@ -47,6 +47,11 @@ struct ScenePreset {
 	bool use_audio_tracks = false;
 	uint32_t audio_tracks = 1; // bitmask: bit0 = track 1 ... bit5 = track 6
 
+	// Recording video bitrate in kbps. Robust only in Advanced output mode
+	// (written to recordEncoder.json as CBR). Ignored in Simple mode.
+	bool use_rec_bitrate = false;
+	uint32_t rec_bitrate = 6000;
+
 	// When a video override is requested but an output is active, stop the
 	// current recording, apply the change, and start a new recording. Produces
 	// a separate file -- OBS cannot change resolution mid-output.
@@ -60,7 +65,7 @@ struct ScenePreset {
 	{
 		return enabled && (use_base_res || use_output_res || use_fps ||
 				   use_rec_path || use_rec_format ||
-				   use_audio_tracks);
+				   use_audio_tracks || use_rec_bitrate);
 	}
 };
 

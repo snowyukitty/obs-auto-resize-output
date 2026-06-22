@@ -162,6 +162,24 @@ void PresetDock::buildUi()
 		auto *tracksWrap = new QWidget();
 		tracksWrap->setLayout(tracksRow);
 		g->addWidget(tracksWrap, r, 1, 1, 3);
+		++r;
+
+		m_useRecBitrate =
+			new QCheckBox(tr("Video bitrate (kbps)"));
+		m_recBitrate = new QSpinBox();
+		m_recBitrate->setRange(100, 300000);
+		m_recBitrate->setSingleStep(500);
+		m_recBitrate->setValue(6000);
+		g->addWidget(m_useRecBitrate, r, 0);
+		g->addWidget(m_recBitrate, r, 1, 1, 3);
+		++r;
+
+		auto *brNote = new QLabel(
+			tr("Bitrate override requires Advanced output mode "
+			   "(sets the recording encoder to CBR)."));
+		brNote->setWordWrap(true);
+		brNote->setStyleSheet("color: gray; font-size: 11px;");
+		g->addWidget(brNote, r, 0, 1, 4);
 	}
 	root->addWidget(m_recGroup);
 
@@ -203,16 +221,16 @@ void PresetDock::buildUi()
 		this, &PresetDock::onEditSceneChanged);
 
 	const QList<QCheckBox *> checks = {
-		m_enabled,     m_useBaseRes,    m_useOutputRes,
-		m_useFps,      m_useRecPath,    m_useRecFormat,
-		m_useAudioTracks, m_restartRecording,
-		m_track[0],    m_track[1],      m_track[2],
-		m_track[3],    m_track[4],      m_track[5]};
+		m_enabled,        m_useBaseRes,      m_useOutputRes,
+		m_useFps,         m_useRecPath,      m_useRecFormat,
+		m_useAudioTracks, m_useRecBitrate,   m_restartRecording,
+		m_track[0],       m_track[1],        m_track[2],
+		m_track[3],       m_track[4],        m_track[5]};
 	for (QCheckBox *c : checks)
 		connect(c, &QCheckBox::toggled, this, &PresetDock::onFieldChanged);
 
-	const QList<QSpinBox *> spins = {m_baseCx,   m_baseCy,  m_outputCx,
-					 m_outputCy, m_fps};
+	const QList<QSpinBox *> spins = {m_baseCx,   m_baseCy, m_outputCx,
+					 m_outputCy, m_fps,    m_recBitrate};
 	for (QSpinBox *s : spins)
 		connect(s, QOverload<int>::of(&QSpinBox::valueChanged), this,
 			&PresetDock::onFieldChanged);
@@ -340,6 +358,9 @@ void PresetDock::loadFromScene()
 	for (int i = 0; i < 6; ++i)
 		m_track[i]->setChecked((p.audio_tracks >> i) & 1u);
 
+	m_useRecBitrate->setChecked(p.use_rec_bitrate);
+	m_recBitrate->setValue((int)p.rec_bitrate);
+
 	m_restartRecording->setChecked(p.restart_recording);
 
 	m_loading = false;
@@ -383,6 +404,9 @@ void PresetDock::saveToScene()
 			mask |= (1u << i);
 	p.audio_tracks = mask;
 
+	p.use_rec_bitrate = m_useRecBitrate->isChecked();
+	p.rec_bitrate = (uint32_t)m_recBitrate->value();
+
 	p.restart_recording = m_restartRecording->isChecked();
 
 	preset_save(scene, p);
@@ -414,6 +438,7 @@ void PresetDock::updateEnabledState()
 	m_recFormat->setEnabled(m_useRecFormat->isChecked());
 	for (int i = 0; i < 6; ++i)
 		m_track[i]->setEnabled(m_useAudioTracks->isChecked());
+	m_recBitrate->setEnabled(m_useRecBitrate->isChecked());
 }
 
 void PresetDock::updateModeLabel()
