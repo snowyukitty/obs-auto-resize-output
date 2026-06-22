@@ -39,7 +39,7 @@ git clone --depth 1 $TemplateRepo $tmp | Out-Null
 try {
     # --- 2. Copy build infrastructure into our repo (NOT src/ or data/) ---
     $infra = @(
-        "cmake", ".github", "CMakePresets.json", "buildspec.json",
+        "cmake", ".github", "build-aux", "CMakePresets.json", "buildspec.json",
         ".clang-format", ".clang-tidy", ".cmake-format.yaml", ".gitignore",
         ".editorconfig", "CMakeLists.txt"
     )

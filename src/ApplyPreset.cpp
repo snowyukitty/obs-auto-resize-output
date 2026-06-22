@@ -54,8 +54,7 @@ static void apply_recording_config(const ScenePreset &p)
 	}
 
 	if (p.use_rec_format && !p.rec_format.empty()) {
-		config_set_string(cfg, section, "RecFormat2",
-				  p.rec_format.c_str());
+		config_set_string(cfg, section, "RecFormat2", p.rec_format.c_str());
 		changed = true;
 	}
 
@@ -67,8 +66,7 @@ static void apply_recording_config(const ScenePreset &p)
 
 	if (changed) {
 		config_save(cfg);
-		ARO_LOG(LOG_INFO,
-			"Applied recording config (mode=%s) for upcoming recordings",
+		ARO_LOG(LOG_INFO, "Applied recording config (mode=%s) for upcoming recordings",
 			advanced ? "Advanced" : "Simple");
 	}
 }
@@ -85,20 +83,17 @@ static void apply_recording_bitrate(const ScenePreset &p)
 		return;
 
 	config_t *cfg = obs_frontend_get_profile_config();
-	const char *mode = cfg ? config_get_string(cfg, "Output", "Mode")
-			       : nullptr;
+	const char *mode = cfg ? config_get_string(cfg, "Output", "Mode") : nullptr;
 	const bool advanced = mode && strcmp(mode, "Advanced") == 0;
 	if (!advanced) {
-		ARO_LOG(LOG_WARNING,
-			"Recording bitrate override needs Advanced output mode; ignored in Simple mode");
+		ARO_LOG(LOG_WARNING, "Recording bitrate override needs Advanced output mode; ignored in Simple mode");
 		return;
 	}
 
 	char *profile_path = obs_frontend_get_current_profile_path();
 	if (!profile_path)
 		return;
-	const std::string path =
-		std::string(profile_path) + "/recordEncoder.json";
+	const std::string path = std::string(profile_path) + "/recordEncoder.json";
 	bfree(profile_path);
 
 	// Preserve any existing encoder settings; only override rate control.
@@ -110,9 +105,7 @@ static void apply_recording_bitrate(const ScenePreset &p)
 	obs_data_save_json_safe(enc, path.c_str(), "tmp", "bak");
 	obs_data_release(enc);
 
-	ARO_LOG(LOG_INFO,
-		"Set recording encoder to CBR %u kbps for upcoming recordings",
-		p.rec_bitrate);
+	ARO_LOG(LOG_INFO, "Set recording encoder to CBR %u kbps for upcoming recordings", p.rec_bitrate);
 }
 
 // ---------------------------------------------------------------------------
@@ -121,8 +114,7 @@ static void apply_recording_bitrate(const ScenePreset &p)
 
 // Mirror applied video values into the profile config so the Settings dialog
 // and the next launch reflect what is actually running.
-static void persist_video_config(const ScenePreset &p,
-				 const struct obs_video_info &ovi)
+static void persist_video_config(const ScenePreset &p, const struct obs_video_info &ovi)
 {
 	config_t *cfg = obs_frontend_get_profile_config();
 	if (!cfg)
@@ -183,10 +175,8 @@ static VideoApplyResult apply_video(const ScenePreset &p)
 	switch (r) {
 	case OBS_VIDEO_SUCCESS:
 		persist_video_config(p, ovi);
-		ARO_LOG(LOG_INFO,
-			"Applied video: base=%ux%u output=%ux%u fps=%u/%u",
-			ovi.base_width, ovi.base_height, ovi.output_width,
-			ovi.output_height, ovi.fps_num, ovi.fps_den);
+		ARO_LOG(LOG_INFO, "Applied video: base=%ux%u output=%ux%u fps=%u/%u", ovi.base_width, ovi.base_height,
+			ovi.output_width, ovi.output_height, ovi.fps_num, ovi.fps_den);
 		return VideoApplyResult::Applied;
 	case OBS_VIDEO_CURRENTLY_ACTIVE:
 		return VideoApplyResult::BlockedActive;
@@ -219,18 +209,15 @@ void aro_apply_preset_for_scene(obs_source_t *scene)
 
 	switch (vr) {
 	case VideoApplyResult::Applied:
-		report(std::string("Applied output settings for scene '") +
-		       (scene_name ? scene_name : "") + "'.");
+		report(std::string("Applied output settings for scene '") + (scene_name ? scene_name : "") + "'.");
 		break;
 
 	case VideoApplyResult::BlockedActive:
-		if (p.restart_recording && obs_frontend_recording_active() &&
-		    !obs_frontend_streaming_active() &&
+		if (p.restart_recording && obs_frontend_recording_active() && !obs_frontend_streaming_active() &&
 		    !obs_frontend_virtualcam_active()) {
 			// Only a recording is holding the video pipeline; we can
 			// stop it, change video, and start a fresh recording.
-			ARO_LOG(LOG_INFO,
-				"Scene '%s': restarting recording to apply video changes",
+			ARO_LOG(LOG_INFO, "Scene '%s': restarting recording to apply video changes",
 				scene_name ? scene_name : "");
 			report("Restarting recording to apply new resolution...");
 
@@ -239,8 +226,7 @@ void aro_apply_preset_for_scene(obs_source_t *scene)
 			g_pending_restart_scene = obs_source_get_weak_source(scene);
 			obs_frontend_recording_stop();
 		} else {
-			ARO_LOG(LOG_WARNING,
-				"Scene '%s': cannot change resolution/FPS while an output is active",
+			ARO_LOG(LOG_WARNING, "Scene '%s': cannot change resolution/FPS while an output is active",
 				scene_name ? scene_name : "");
 			report("Recording/streaming active: resolution & FPS "
 			       "changes are deferred (OBS limitation). "
@@ -271,8 +257,8 @@ void aro_on_recording_stopped()
 		return;
 
 	const ScenePreset p = preset_load(scene);
-	apply_video(p);             // pipeline is now idle
-	apply_recording_config(p);  // re-assert in case anything reset it
+	apply_video(p);            // pipeline is now idle
+	apply_recording_config(p); // re-assert in case anything reset it
 	apply_recording_bitrate(p);
 	obs_source_release(scene);
 

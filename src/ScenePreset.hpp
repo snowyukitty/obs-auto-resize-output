@@ -57,14 +57,10 @@ struct ScenePreset {
 	// a separate file -- OBS cannot change resolution mid-output.
 	bool restart_recording = false;
 
-	bool any_video_override() const
-	{
-		return enabled && (use_base_res || use_output_res || use_fps);
-	}
+	bool any_video_override() const { return enabled && (use_base_res || use_output_res || use_fps); }
 	bool any_override() const
 	{
-		return enabled && (use_base_res || use_output_res || use_fps ||
-				   use_rec_path || use_rec_format ||
+		return enabled && (use_base_res || use_output_res || use_fps || use_rec_path || use_rec_format ||
 				   use_audio_tracks || use_rec_bitrate);
 	}
 };

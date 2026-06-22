@@ -22,10 +22,10 @@ struct obs_source;
 typedef struct obs_source obs_source_t;
 
 enum class VideoApplyResult {
-	NoChange,     // preset requested no video override
-	Applied,      // obs_reset_video succeeded
+	NoChange,      // preset requested no video override
+	Applied,       // obs_reset_video succeeded
 	BlockedActive, // an output is active; cannot change video now
-	Failed,       // obs_reset_video returned an unexpected error
+	Failed,        // obs_reset_video returned an unexpected error
 };
 
 // Optional UI status sink. The dock registers this to surface the result of

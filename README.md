@@ -14,6 +14,9 @@
 | 錄製資料夾 | 下一次開始錄製時 | 寫入 profile config |
 | 錄製格式 (mkv/mp4/mov/ts/flv…) | 下一次開始錄製時 | 寫入 profile config |
 | 音軌(bitmask) | 下一次開始錄製時 | 寫入 profile config |
+| 錄製 bitrate(kbps) | 下一次開始錄製時 | **僅 Advanced 輸出模式**;寫入 `recordEncoder.json`,設為 CBR |
+
+> **設定是「進入該 scene 時套用」,不會自動還原。** 若 scene B 沒有覆寫某個欄位,該欄位會維持目前的值(也就是上一個 scene 設過的值),而不是回到 profile 預設。要讓某 scene 用特定值,就在該 scene 明確勾選並設定它。
 
 切換 scene 時,外掛會讀取該 scene 的設定並套用;設定資料存在該 scene source 的 `private_settings` 裡,因此:
 
@@ -36,7 +39,8 @@
 
 ## 已知限制 / 尚未支援
 
-- **錄製 bitrate**:目前未實作。在 Advanced 輸出模式下,錄製編碼器的 bitrate 存在獨立的 `recordEncoder.json` 並需 `obs_encoder_update`,跨版本較脆弱,留待後續。Simple 模式的位元率與品質模式綁定,亦非單一 config key。
+- **錄製 bitrate 僅支援 Advanced 輸出模式**:Advanced 模式下寫入 `recordEncoder.json`(rate_control=CBR + bitrate),OBS 在開始錄製時讀取,故套用到下一次錄製。Simple 模式的錄製位元率與「錄製品質」模式綁定、且與串流共用編碼器,無法乾淨地單獨設定,因此在 Simple 模式下此欄位會被忽略(並於 log 提示)。
+- 設為 bitrate 會把錄製編碼器切成 **CBR**(這是 bitrate 生效的前提);若你原本用 CQP/CRF,套用後會變成 CBR。
 - 錄製設定的 config key(`RecFormat2`、`RecTracks`、`FilePath`/`RecFilePath`)以 **OBS 30/31+** 為目標。若你的 OBS 較舊,key 名稱可能不同(見 `src/ApplyPreset.cpp` 集中管理處)。
 
 ## 設計重點

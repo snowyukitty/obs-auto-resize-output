@@ -118,9 +118,8 @@ void PresetDock::buildUi()
 		g->addWidget(m_fps, r, 1);
 		++r;
 
-		auto *note = new QLabel(
-			tr("Resolution / FPS change only while idle. While "
-			   "recording or streaming, OBS blocks the change."));
+		auto *note = new QLabel(tr("Resolution / FPS change only while idle. While "
+					   "recording or streaming, OBS blocks the change."));
 		note->setWordWrap(true);
 		note->setStyleSheet("color: gray; font-size: 11px;");
 		g->addWidget(note, r, 0, 1, 4);
@@ -144,8 +143,7 @@ void PresetDock::buildUi()
 		m_useRecFormat = new QCheckBox(tr("Format"));
 		m_recFormat = new QComboBox();
 		for (const auto &f : kFormats)
-			m_recFormat->addItem(QString::fromUtf8(f.label),
-					     QString::fromUtf8(f.id));
+			m_recFormat->addItem(QString::fromUtf8(f.label), QString::fromUtf8(f.id));
 		g->addWidget(m_useRecFormat, r, 0);
 		g->addWidget(m_recFormat, r, 1, 1, 3);
 		++r;
@@ -154,8 +152,7 @@ void PresetDock::buildUi()
 		g->addWidget(m_useAudioTracks, r, 0);
 		auto *tracksRow = new QHBoxLayout();
 		for (int i = 0; i < 6; ++i) {
-			m_track[i] =
-				new QCheckBox(QString::number(i + 1));
+			m_track[i] = new QCheckBox(QString::number(i + 1));
 			tracksRow->addWidget(m_track[i]);
 		}
 		tracksRow->addStretch(1);
@@ -164,8 +161,7 @@ void PresetDock::buildUi()
 		g->addWidget(tracksWrap, r, 1, 1, 3);
 		++r;
 
-		m_useRecBitrate =
-			new QCheckBox(tr("Video bitrate (kbps)"));
+		m_useRecBitrate = new QCheckBox(tr("Video bitrate (kbps)"));
 		m_recBitrate = new QSpinBox();
 		m_recBitrate->setRange(100, 300000);
 		m_recBitrate->setSingleStep(500);
@@ -174,9 +170,8 @@ void PresetDock::buildUi()
 		g->addWidget(m_recBitrate, r, 1, 1, 3);
 		++r;
 
-		auto *brNote = new QLabel(
-			tr("Bitrate override requires Advanced output mode "
-			   "(sets the recording encoder to CBR)."));
+		auto *brNote = new QLabel(tr("Bitrate override requires Advanced output mode "
+					     "(sets the recording encoder to CBR)."));
 		brNote->setWordWrap(true);
 		brNote->setStyleSheet("color: gray; font-size: 11px;");
 		g->addWidget(brNote, r, 0, 1, 4);
@@ -184,13 +179,11 @@ void PresetDock::buildUi()
 	root->addWidget(m_recGroup);
 
 	// --- Behaviour --------------------------------------------------------
-	m_restartRecording = new QCheckBox(
-		tr("If recording when switching to this scene, restart "
-		   "recording to apply video changes (creates a new file)"));
-	m_restartRecording->setToolTip(
-		tr("OBS cannot change resolution mid-recording. Enabling this "
-		   "stops the current recording, applies the new resolution, "
-		   "and starts a new recording file."));
+	m_restartRecording = new QCheckBox(tr("If recording when switching to this scene, restart "
+					      "recording to apply video changes (creates a new file)"));
+	m_restartRecording->setToolTip(tr("OBS cannot change resolution mid-recording. Enabling this "
+					  "stops the current recording, applies the new resolution, "
+					  "and starts a new recording file."));
 	root->addWidget(m_restartRecording);
 
 	// --- Actions ----------------------------------------------------------
@@ -217,36 +210,26 @@ void PresetDock::buildUi()
 	root->addStretch(1);
 
 	// --- Wiring -----------------------------------------------------------
-	connect(m_sceneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-		this, &PresetDock::onEditSceneChanged);
+	connect(m_sceneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		&PresetDock::onEditSceneChanged);
 
-	const QList<QCheckBox *> checks = {
-		m_enabled,        m_useBaseRes,      m_useOutputRes,
-		m_useFps,         m_useRecPath,      m_useRecFormat,
-		m_useAudioTracks, m_useRecBitrate,   m_restartRecording,
-		m_track[0],       m_track[1],        m_track[2],
-		m_track[3],       m_track[4],        m_track[5]};
+	const QList<QCheckBox *> checks = {m_enabled,          m_useBaseRes,   m_useOutputRes,   m_useFps,
+					   m_useRecPath,       m_useRecFormat, m_useAudioTracks, m_useRecBitrate,
+					   m_restartRecording, m_track[0],     m_track[1],       m_track[2],
+					   m_track[3],         m_track[4],     m_track[5]};
 	for (QCheckBox *c : checks)
 		connect(c, &QCheckBox::toggled, this, &PresetDock::onFieldChanged);
 
-	const QList<QSpinBox *> spins = {m_baseCx,   m_baseCy, m_outputCx,
-					 m_outputCy, m_fps,    m_recBitrate};
+	const QList<QSpinBox *> spins = {m_baseCx, m_baseCy, m_outputCx, m_outputCy, m_fps, m_recBitrate};
 	for (QSpinBox *s : spins)
-		connect(s, QOverload<int>::of(&QSpinBox::valueChanged), this,
-			&PresetDock::onFieldChanged);
+		connect(s, QOverload<int>::of(&QSpinBox::valueChanged), this, &PresetDock::onFieldChanged);
 
-	connect(m_recPath, &QLineEdit::textEdited, this,
-		&PresetDock::onFieldChanged);
-	connect(m_recFormat,
-		QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-		&PresetDock::onFieldChanged);
+	connect(m_recPath, &QLineEdit::textEdited, this, &PresetDock::onFieldChanged);
+	connect(m_recFormat, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &PresetDock::onFieldChanged);
 
-	connect(m_browse, &QPushButton::clicked, this,
-		&PresetDock::onBrowsePath);
-	connect(m_copyFromCurrent, &QPushButton::clicked, this,
-		&PresetDock::onCopyFromCurrent);
-	connect(m_applyNow, &QPushButton::clicked, this,
-		&PresetDock::onApplyNow);
+	connect(m_browse, &QPushButton::clicked, this, &PresetDock::onBrowsePath);
+	connect(m_copyFromCurrent, &QPushButton::clicked, this, &PresetDock::onCopyFromCurrent);
+	connect(m_applyNow, &QPushButton::clicked, this, &PresetDock::onApplyNow);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +259,7 @@ void PresetDock::refreshSceneList()
 	if (idx < 0) {
 		obs_source_t *cur = obs_frontend_get_current_scene();
 		if (cur) {
-			idx = m_sceneCombo->findText(
-				QString::fromUtf8(obs_source_get_name(cur)));
+			idx = m_sceneCombo->findText(QString::fromUtf8(obs_source_get_name(cur)));
 			obs_source_release(cur);
 		}
 	}
@@ -296,8 +278,7 @@ void PresetDock::onProgramSceneChanged()
 	obs_source_t *cur = obs_frontend_get_current_scene();
 	if (!cur)
 		return;
-	const int idx =
-		m_sceneCombo->findText(QString::fromUtf8(obs_source_get_name(cur)));
+	const int idx = m_sceneCombo->findText(QString::fromUtf8(obs_source_get_name(cur)));
 	obs_source_release(cur);
 	if (idx >= 0 && idx != m_sceneCombo->currentIndex())
 		m_sceneCombo->setCurrentIndex(idx); // triggers loadFromScene
@@ -349,8 +330,7 @@ void PresetDock::loadFromScene()
 
 	m_useRecFormat->setChecked(p.use_rec_format);
 	{
-		int fi = m_recFormat->findData(
-			QString::fromStdString(p.rec_format));
+		int fi = m_recFormat->findData(QString::fromStdString(p.rec_format));
 		m_recFormat->setCurrentIndex(fi >= 0 ? fi : 0);
 	}
 
@@ -394,8 +374,7 @@ void PresetDock::saveToScene()
 	p.rec_path = m_recPath->text().toStdString();
 
 	p.use_rec_format = m_useRecFormat->isChecked();
-	p.rec_format =
-		m_recFormat->currentData().toString().toStdString();
+	p.rec_format = m_recFormat->currentData().toString().toStdString();
 
 	p.use_audio_tracks = m_useAudioTracks->isChecked();
 	uint32_t mask = 0;
@@ -446,8 +425,7 @@ void PresetDock::updateModeLabel()
 	config_t *cfg = obs_frontend_get_profile_config();
 	const char *mode = cfg ? config_get_string(cfg, "Output", "Mode") : "";
 	const bool advanced = mode && std::strcmp(mode, "Advanced") == 0;
-	m_modeLabel->setText(tr("Current output mode: %1")
-				     .arg(advanced ? "Advanced" : "Simple"));
+	m_modeLabel->setText(tr("Current output mode: %1").arg(advanced ? "Advanced" : "Simple"));
 }
 
 // ---------------------------------------------------------------------------
@@ -456,8 +434,7 @@ void PresetDock::updateModeLabel()
 
 void PresetDock::onBrowsePath()
 {
-	const QString dir = QFileDialog::getExistingDirectory(
-		this, tr("Select recording folder"), m_recPath->text());
+	const QString dir = QFileDialog::getExistingDirectory(this, tr("Select recording folder"), m_recPath->text());
 	if (!dir.isEmpty()) {
 		m_recPath->setText(dir);
 		onFieldChanged();
@@ -484,8 +461,7 @@ void PresetDock::onCopyFromCurrent()
 		const bool advanced = mode && std::strcmp(mode, "Advanced") == 0;
 		const char *section = advanced ? "AdvOut" : "SimpleOutput";
 
-		const char *path = config_get_string(
-			cfg, section, advanced ? "RecFilePath" : "FilePath");
+		const char *path = config_get_string(cfg, section, advanced ? "RecFilePath" : "FilePath");
 		if (path)
 			m_recPath->setText(QString::fromUtf8(path));
 
@@ -496,8 +472,7 @@ void PresetDock::onCopyFromCurrent()
 				m_recFormat->setCurrentIndex(fi);
 		}
 
-		const uint32_t tracks =
-			(uint32_t)config_get_int(cfg, section, "RecTracks");
+		const uint32_t tracks = (uint32_t)config_get_int(cfg, section, "RecTracks");
 		for (int i = 0; i < 6; ++i)
 			m_track[i]->setChecked((tracks >> i) & 1u);
 	}
