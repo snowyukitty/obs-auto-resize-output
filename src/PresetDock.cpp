@@ -82,14 +82,16 @@ void PresetDock::buildUi()
 		row->addWidget(new QLabel(tr("Editing scene:")));
 		m_sceneCombo = new QComboBox();
 		m_sceneCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-		m_sceneCombo->setToolTip(tr("選擇要編輯哪個場景的設定(預設跟著目前直播/錄影中的場景)。"));
+		m_sceneCombo->setToolTip(tr("Choose which scene's settings to edit "
+					    "(defaults to the current program scene)."));
 		row->addWidget(m_sceneCombo, 1);
 		root->addLayout(row);
 	}
 
 	m_enabled = new QCheckBox(tr("Enable per-scene overrides for this scene"));
-	m_enabled->setToolTip(tr("<b>每場景獨立設定</b><br>開啟後,切到此場景時會自動套用下面"
-				 "勾選的項目;沒勾選的項目維持目前的值。"));
+	m_enabled->setToolTip(tr("<b>Per-scene overrides</b><br>When on, switching to this scene "
+				 "automatically applies the checked items below. Unchecked items "
+				 "keep their current value."));
 	root->addWidget(m_enabled);
 
 	m_modeLabel = new QLabel();
@@ -105,8 +107,9 @@ void PresetDock::buildUi()
 		m_useBaseRes = new QCheckBox(tr("Base (canvas) resolution"));
 		m_baseCx = makeResSpin(1920);
 		m_baseCy = makeResSpin(1080);
-		setTip(tr("<b>基底(畫布)解析度</b><br>OBS 合成畫面的整體尺寸,也就是預覽看到的"
-			  "範圍。一般設成和你的螢幕或擷取來源相同。"),
+		setTip(tr("<b>Base (canvas) resolution</b><br>The overall size of OBS's "
+			  "composited canvas — the area shown in the preview. Usually set "
+			  "to match your monitor or capture source."),
 		       {m_useBaseRes, m_baseCx, m_baseCy});
 		g->addWidget(m_useBaseRes, r, 0);
 		g->addWidget(m_baseCx, r, 1);
@@ -117,9 +120,10 @@ void PresetDock::buildUi()
 		m_useOutputRes = new QCheckBox(tr("Output (scaled) resolution"));
 		m_outputCx = makeResSpin(1920);
 		m_outputCy = makeResSpin(1080);
-		setTip(tr("<b>輸出(縮放後)解析度 = 清晰度/畫面尺寸</b><br>實際錄成檔案的像素"
-			  "尺寸,會把畫布縮放到這個大小。例如畫布 2560×1440、輸出設 1920×1080 "
-			  "就會縮小後存檔。數字越大越清晰,但越吃效能、檔案越大。"),
+		setTip(tr("<b>Output (scaled) resolution = clarity / frame size</b><br>The "
+			  "pixel size actually recorded; the canvas is scaled to this. E.g. "
+			  "a 2560×1440 canvas with 1920×1080 output is downscaled before "
+			  "saving. Larger = sharper, but heavier and bigger files."),
 		       {m_useOutputRes, m_outputCx, m_outputCy});
 		g->addWidget(m_useOutputRes, r, 0);
 		g->addWidget(m_outputCx, r, 1);
@@ -131,11 +135,13 @@ void PresetDock::buildUi()
 		m_fps = new QSpinBox();
 		m_fps->setRange(1, 1000);
 		m_fps->setValue(60);
-		setTip(tr("<b>FPS(每秒張數)= 流暢度</b><br>每秒錄幾張畫面。30 一般、"
-			  "60 順暢(適合遊戲/動作)。越高動作越滑順,但越吃 CPU/GPU、檔案越大。"
-			  "<br><br><b>和碼率(bitrate)的差別:</b>FPS 管「一秒有幾張畫面」"
-			  "(流暢度);bitrate 管「每秒花多少資料量去壓縮這些畫面」(畫質)。"
-			  "兩者互相獨立。"),
+		setTip(tr("<b>FPS (frames per second) = smoothness</b><br>How many frames "
+			  "are recorded each second. 30 = normal, 60 = smooth (good for "
+			  "games / motion). Higher is smoother but uses more CPU/GPU and "
+			  "makes bigger files.<br><br><b>Difference vs bitrate:</b> FPS "
+			  "controls how many frames per second (smoothness); bitrate "
+			  "controls how much data is spent compressing those frames "
+			  "(quality). They are independent."),
 		       {m_useFps, m_fps});
 		g->addWidget(m_useFps, r, 0);
 		g->addWidget(m_fps, r, 1);
@@ -158,8 +164,9 @@ void PresetDock::buildUi()
 		m_useRecPath = new QCheckBox(tr("Recording folder"));
 		m_recPath = new QLineEdit();
 		m_browse = new QPushButton(tr("Browse..."));
-		setTip(tr("<b>錄影存放資料夾</b><br>此場景的錄影檔要存到哪裡。可讓不同場景"
-			  "分流(例如遊戲、教學分開存放)。"),
+		setTip(tr("<b>Recording folder</b><br>Where this scene's recordings are "
+			  "saved. Lets you route different scenes to different folders "
+			  "(e.g. games vs tutorials)."),
 		       {m_useRecPath, m_recPath});
 		g->addWidget(m_useRecPath, r, 0);
 		g->addWidget(m_recPath, r, 1, 1, 2);
@@ -170,21 +177,24 @@ void PresetDock::buildUi()
 		m_recFormat = new QComboBox();
 		for (const auto &f : kFormats)
 			m_recFormat->addItem(QString::fromUtf8(f.label), QString::fromUtf8(f.id));
-		setTip(tr("<b>錄影檔格式(容器)</b><br>mkv 最耐當機(當掉也不易壞檔);"
-			  "mp4 / hybrid_mp4 相容性好、可直接剪輯。格式本身不影響畫質。"),
+		setTip(tr("<b>Recording file format (container)</b><br>mkv is the most "
+			  "crash-resistant (a crash rarely corrupts the file); mp4 / "
+			  "hybrid_mp4 are widely compatible and editable directly. The "
+			  "container itself does not affect quality."),
 		       {m_useRecFormat, m_recFormat});
 		g->addWidget(m_useRecFormat, r, 0);
 		g->addWidget(m_recFormat, r, 1, 1, 3);
 		++r;
 
 		m_useAudioTracks = new QCheckBox(tr("Audio tracks"));
-		m_useAudioTracks->setToolTip(tr("<b>要錄進檔案的音軌</b><br>可多選。例如 軌1=總混音、軌2=麥克風、"
-						"軌3=遊戲聲,分軌方便事後個別調整。"));
+		m_useAudioTracks->setToolTip(tr("<b>Audio tracks to record</b><br>Multi-select. E.g. track 1 = "
+						"full mix, track 2 = microphone, track 3 = game audio — separate "
+						"tracks make later editing easier."));
 		g->addWidget(m_useAudioTracks, r, 0);
 		auto *tracksRow = new QHBoxLayout();
 		for (int i = 0; i < 6; ++i) {
 			m_track[i] = new QCheckBox(QString::number(i + 1));
-			m_track[i]->setToolTip(tr("錄製音軌 %1").arg(i + 1));
+			m_track[i]->setToolTip(tr("Record audio track %1").arg(i + 1));
 			tracksRow->addWidget(m_track[i]);
 		}
 		tracksRow->addStretch(1);
@@ -198,12 +208,14 @@ void PresetDock::buildUi()
 		m_recBitrate->setRange(100, 300000);
 		m_recBitrate->setSingleStep(500);
 		m_recBitrate->setValue(6000);
-		setTip(tr("<b>碼率 Bitrate(kbps)= 畫質 / 檔案大小</b><br>每秒用多少資料量"
-			  "來編碼影像。越高畫質越好、檔案越大。<br><br><b>和解析度 / FPS 的差別:"
-			  "</b>解析度=畫面尺寸(清晰度)、FPS=流暢度、bitrate=每秒的資料預算"
-			  "(壓縮後的畫質)。三者各自獨立——例如 1080p60 若 bitrate 太低,畫面"
-			  "會糊、出現方塊。<br><br>參考值:1080p30≈8000、1080p60≈12000、"
-			  "1440p60≈20000 kbps。僅 Advanced 輸出模式有效。"),
+		setTip(tr("<b>Bitrate (kbps) = quality / file size</b><br>How much data per "
+			  "second is used to encode the video. Higher = better quality and "
+			  "bigger files.<br><br><b>Difference vs resolution / FPS:</b> "
+			  "resolution = frame size (clarity), FPS = smoothness, bitrate = "
+			  "the per-second data budget (compressed quality). All three are "
+			  "independent — e.g. 1080p60 with too low a bitrate looks blurry / "
+			  "blocky.<br><br>Reference: 1080p30 ≈ 8000, 1080p60 ≈ 12000, "
+			  "1440p60 ≈ 20000 kbps. Advanced output mode only."),
 		       {m_useRecBitrate, m_recBitrate});
 		g->addWidget(m_useRecBitrate, r, 0);
 		g->addWidget(m_recBitrate, r, 1, 1, 3);
@@ -229,9 +241,11 @@ void PresetDock::buildUi()
 	{
 		auto *row = new QHBoxLayout();
 		m_copyFromCurrent = new QPushButton(tr("Copy from current OBS settings"));
-		m_copyFromCurrent->setToolTip(tr("把 OBS 目前的設定值填進上面欄位當作起點(不會自動勾選任何項目)。"));
+		m_copyFromCurrent->setToolTip(tr("Fill the fields above with OBS's current values as a "
+						 "starting point (does not check any boxes)."));
 		m_applyNow = new QPushButton(tr("Apply now"));
-		m_applyNow->setToolTip(tr("立即儲存並套用。若正在編輯的場景就是目前場景,會馬上生效。"));
+		m_applyNow->setToolTip(tr("Save and apply now. If the scene being edited is the "
+					  "current program scene, it takes effect immediately."));
 		row->addWidget(m_copyFromCurrent);
 		row->addStretch(1);
 		row->addWidget(m_applyNow);
