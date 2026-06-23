@@ -46,6 +46,11 @@ runs:
       working-directory: ${{ inputs.workingDirectory }}
       env:
         CHANGED_FILES: ${{ steps.checks.outputs.changedFiles }}
+        # Homebrew 5.1.15+ skips installs from untrusted third-party taps (the
+        # obsproject/tools tap that provides clang-format@19), which breaks this
+        # check on CI runners. Restore the prior behaviour. (Documented GitHub
+        # Actions workaround; see docs.brew.sh/Tap-Trust.)
+        HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
       run: |
         : Run clang-format 🐉
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
