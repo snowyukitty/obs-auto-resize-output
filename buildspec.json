@@ -33,13 +33,13 @@
   },
   "platformConfig": {
     "macos": {
-      "bundleId": "com.example.plugintemplate-for-obs"
+      "bundleId": "com.snowyukitty.obs-auto-resize-output"
     }
   },
   "name": "obs-auto-resize-output",
   "displayName": "Auto Resize Output",
   "version": "1.0.0",
   "author": "snowyukitty",
-  "website": "https://example.com",
-  "email": "me@example.com"
+  "website": "https://github.com/snowyukitty/obs-auto-resize-output",
+  "email": "snowyukitty@gmail.com"
 }

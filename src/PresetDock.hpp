@@ -38,6 +38,7 @@ private slots:
 	void onBrowsePath();
 	void onCopyFromCurrent();
 	void onApplyNow();
+	void onMuteToMeToggled(bool checked);
 
 private:
 	void buildUi();
@@ -51,6 +52,13 @@ private:
 
 	bool m_loading = false; // guard so loadFromScene() doesn't trigger saves
 
+	// Scene-following: the dock normally tracks the program scene, but once the
+	// user manually picks a different scene to edit we stop yanking the
+	// selection away on every scene change.
+	bool m_followProgram = true;
+	bool m_programmaticSceneChange = false;
+
+	QPushButton *m_muteToMe = nullptr;
 	QComboBox *m_sceneCombo = nullptr;
 	QLabel *m_modeLabel = nullptr;
 	QLabel *m_statusLabel = nullptr;
@@ -77,6 +85,10 @@ private:
 	QCheckBox *m_track[6] = {};
 	QCheckBox *m_useRecBitrate = nullptr;
 	QSpinBox *m_recBitrate = nullptr;
+
+	QGroupBox *m_audioGroup = nullptr;
+	QCheckBox *m_useMonitorDevice = nullptr;
+	QComboBox *m_monitorDevice = nullptr;
 
 	QCheckBox *m_restartRecording = nullptr;
 

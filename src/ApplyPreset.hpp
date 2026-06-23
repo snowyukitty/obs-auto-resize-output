@@ -41,5 +41,21 @@ void aro_apply_preset_for_scene(obs_source_t *scene);
 // stop -> apply -> start restart sequence.
 void aro_on_recording_stopped();
 
-// Release any pending state (call on module unload / exit).
+// "Mute to me": a global, instant toggle that silences what YOU hear without
+// touching the recording. It routes OBS's global monitoring device to a silent
+// sentinel (and restores it on un-mute). Independent of any scene/preset and
+// safe to toggle mid-recording -- the output/encoder path is untouched, so
+// recorded content and volume are unchanged. Uses the monitoring device rather
+// than per-source monitoring type on purpose: monitoring_type is persisted into
+// the scene collection on every save, so muting via type could permanently lose
+// the user's setup; the monitoring device is a single global value and is safe.
+void aro_set_mute_to_me(bool mute);
+bool aro_mute_to_me_active();
+
+// Defensive: if a prior run was killed while muted, the silent sentinel device
+// may still be set. Call once on load to reset it to Default. No-op otherwise.
+void aro_recover_monitoring_on_load();
+
+// Release any pending state (call on module unload / exit). Also un-mutes "mute
+// to me" so the silent sentinel device is never left behind.
 void aro_shutdown();

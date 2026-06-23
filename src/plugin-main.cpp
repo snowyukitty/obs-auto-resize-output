@@ -40,6 +40,9 @@ void on_frontend_event(enum obs_frontend_event event, void *)
 {
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		// Clear any leftover "muted to you" device from a prior crash before
+		// the startup scene's own monitor-device preset is applied.
+		aro_recover_monitoring_on_load();
 		// Apply the startup scene once the UI/video pipeline is ready.
 		apply_current_scene();
 		if (g_dock)

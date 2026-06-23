@@ -52,6 +52,17 @@ struct ScenePreset {
 	bool use_rec_bitrate = false;
 	uint32_t rec_bitrate = 6000;
 
+	// --- Audio monitoring (the device YOU hear; independent of recording) ---
+	// Switches OBS's global audio monitoring device when this scene becomes
+	// active. Monitoring is the playback path only -- it never touches the
+	// encoders, so this applies instantly even mid-recording and does not change
+	// what (or how loud) anything is recorded. Lets a scene route monitored
+	// audio to a device you are not listening to (so you stop hearing it) while
+	// recording keeps capturing it at full volume.
+	bool use_monitor_device = false;
+	std::string monitor_device_name; // human-readable name (for obs_set + display)
+	std::string monitor_device_id;   // device id (for obs_set + matching)
+
 	// When a video override is requested but an output is active, stop the
 	// current recording, apply the change, and start a new recording. Produces
 	// a separate file -- OBS cannot change resolution mid-output.
@@ -61,7 +72,7 @@ struct ScenePreset {
 	bool any_override() const
 	{
 		return enabled && (use_base_res || use_output_res || use_fps || use_rec_path || use_rec_format ||
-				   use_audio_tracks || use_rec_bitrate);
+				   use_audio_tracks || use_rec_bitrate || use_monitor_device);
 	}
 };
 

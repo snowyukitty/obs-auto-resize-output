@@ -48,6 +48,10 @@ ScenePreset preset_load(obs_source_t *scene)
 		p.use_rec_bitrate = obs_data_get_bool(d, "use_rec_bitrate");
 		p.rec_bitrate = (uint32_t)obs_data_get_int(d, "rec_bitrate");
 
+		p.use_monitor_device = obs_data_get_bool(d, "use_monitor_device");
+		p.monitor_device_name = obs_data_get_string(d, "monitor_device_name");
+		p.monitor_device_id = obs_data_get_string(d, "monitor_device_id");
+
 		p.restart_recording = obs_data_get_bool(d, "restart_recording");
 
 		obs_data_release(d);
@@ -88,6 +92,10 @@ void preset_save(obs_source_t *scene, const ScenePreset &p)
 
 	obs_data_set_bool(d, "use_rec_bitrate", p.use_rec_bitrate);
 	obs_data_set_int(d, "rec_bitrate", p.rec_bitrate);
+
+	obs_data_set_bool(d, "use_monitor_device", p.use_monitor_device);
+	obs_data_set_string(d, "monitor_device_name", p.monitor_device_name.c_str());
+	obs_data_set_string(d, "monitor_device_id", p.monitor_device_id.c_str());
 
 	obs_data_set_bool(d, "restart_recording", p.restart_recording);
 

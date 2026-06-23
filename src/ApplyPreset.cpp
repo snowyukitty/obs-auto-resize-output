@@ -8,6 +8,7 @@
 #include <util/config-file.h>
 
 #include <cstring>
+#include <string>
 
 // ---------------------------------------------------------------------------
 // Module-local state
@@ -15,6 +16,27 @@
 
 // Set when a video override is deferred until the current recording stops.
 static obs_weak_source_t *g_pending_restart_scene = nullptr;
+
+// "Mute to me" state. Implemented by pointing OBS's GLOBAL monitoring device at
+// a sentinel that resolves to no real device -> all monitoring goes silent,
+// while the recording/output path is untouched. We deliberately do NOT toggle
+// per-source monitoring TYPE: obs_save_source() persists monitoring_type into
+// the scene collection on every save (auto-save, collection switch, and the
+// exit save, which runs before any restore hook), so a save while muted would
+// permanently wipe the user's "Monitor and Output" setup. The monitoring device
+// is a single global value (not saved per source), so switching it is safe.
+static bool g_muted_to_me = false;
+// The device to return to on un-mute (captured when muting; updated if a scene
+// requests a different monitoring device while muted).
+static std::string g_saved_monitor_name;
+static std::string g_saved_monitor_id;
+
+// Sentinel monitoring device: a non-empty, non-"default" id that matches no real
+// device, so the monitor fails to initialize and produces silence (verified on
+// the WASAPI backend; worst case on other backends is that audio is still heard,
+// never data loss).
+static constexpr const char *kSilentMonitorName = "Auto Resize Output (muted to you)";
+static constexpr const char *kSilentMonitorId = "aro::muted-to-you::silent";
 
 static StatusReporter g_status_reporter;
 
@@ -109,6 +131,45 @@ static void apply_recording_bitrate(const ScenePreset &p)
 }
 
 // ---------------------------------------------------------------------------
+// Audio monitoring device (the device YOU hear)
+// ---------------------------------------------------------------------------
+
+// Switch OBS's global audio monitoring device. Monitoring is purely a playback
+// path: it feeds audio to a device for you to listen to and is completely
+// separate from the encoder/output path that recording and streaming use.
+// Re-pointing it therefore takes effect immediately, never interrupts an active
+// recording, and never changes what is recorded or at what volume. This lets a
+// scene send monitored audio to a device you are not listening to (so you stop
+// hearing it) while the recording keeps capturing it untouched.
+static void apply_monitoring_device(const ScenePreset &p)
+{
+	if (!p.use_monitor_device)
+		return;
+
+	if (!obs_audio_monitoring_available()) {
+		ARO_LOG(LOG_WARNING, "Audio monitoring is not available on this system; monitor device ignored");
+		return;
+	}
+
+	// While "mute to me" is active the live device must stay on the silent
+	// sentinel; remember the scene's choice as the device to restore on un-mute.
+	if (g_muted_to_me) {
+		g_saved_monitor_name = p.monitor_device_name;
+		g_saved_monitor_id = p.monitor_device_id;
+		ARO_LOG(LOG_INFO, "Muted to you: deferring scene monitor device '%s' until un-mute",
+			p.monitor_device_name.empty() ? p.monitor_device_id.c_str() : p.monitor_device_name.c_str());
+		return;
+	}
+
+	if (obs_set_audio_monitoring_device(p.monitor_device_name.c_str(), p.monitor_device_id.c_str()))
+		ARO_LOG(LOG_INFO, "Set audio monitoring device to '%s'",
+			p.monitor_device_name.empty() ? p.monitor_device_id.c_str() : p.monitor_device_name.c_str());
+	else
+		ARO_LOG(LOG_WARNING, "Failed to set audio monitoring device to '%s' (id '%s')",
+			p.monitor_device_name.c_str(), p.monitor_device_id.c_str());
+}
+
+// ---------------------------------------------------------------------------
 // Video (obs_reset_video)
 // ---------------------------------------------------------------------------
 
@@ -187,6 +248,68 @@ static VideoApplyResult apply_video(const ScenePreset &p)
 }
 
 // ---------------------------------------------------------------------------
+// "Mute to me" (global monitoring toggle)
+// ---------------------------------------------------------------------------
+
+// Point monitoring back at the saved device (or "Default" if none was saved).
+static void restore_monitor_device()
+{
+	const char *name = g_saved_monitor_name.empty() ? "Default" : g_saved_monitor_name.c_str();
+	const char *id = g_saved_monitor_id.empty() ? "default" : g_saved_monitor_id.c_str();
+	obs_set_audio_monitoring_device(name, id);
+}
+
+bool aro_mute_to_me_active()
+{
+	return g_muted_to_me;
+}
+
+void aro_set_mute_to_me(bool mute)
+{
+	if (!obs_audio_monitoring_available()) {
+		ARO_LOG(LOG_WARNING, "Audio monitoring not available; 'mute to me' has no effect");
+		return;
+	}
+	if (mute == g_muted_to_me)
+		return;
+
+	if (mute) {
+		// Remember the device we're currently listening on, then send
+		// monitoring to the silent sentinel. The output/encoder path is
+		// untouched, so recording continues unchanged.
+		const char *curName = nullptr;
+		const char *curId = nullptr;
+		obs_get_audio_monitoring_device(&curName, &curId);
+		g_saved_monitor_name = curName ? curName : "";
+		g_saved_monitor_id = curId ? curId : "";
+		obs_set_audio_monitoring_device(kSilentMonitorName, kSilentMonitorId);
+		g_muted_to_me = true;
+		ARO_LOG(LOG_INFO, "Mute-to-me ON: monitoring silenced; recording unaffected");
+		report("Muted to you: you no longer hear monitored audio. Recording continues at full volume.");
+	} else {
+		restore_monitor_device();
+		g_muted_to_me = false;
+		ARO_LOG(LOG_INFO, "Mute-to-me OFF: restored monitoring device");
+		report("Unmuted to you: monitoring restored.");
+	}
+}
+
+// Defensive recovery at startup: if a previous run left the sentinel device
+// persisted (e.g. OBS was killed while muted), reset to Default so the user is
+// never silently stuck without monitoring.
+void aro_recover_monitoring_on_load()
+{
+	if (!obs_audio_monitoring_available())
+		return;
+	const char *id = nullptr;
+	obs_get_audio_monitoring_device(nullptr, &id);
+	if (id && strcmp(id, kSilentMonitorId) == 0) {
+		ARO_LOG(LOG_INFO, "Recovered leftover 'muted to you' monitoring device -> Default");
+		obs_set_audio_monitoring_device("Default", "default");
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Top-level apply
 // ---------------------------------------------------------------------------
 
@@ -204,6 +327,10 @@ void aro_apply_preset_for_scene(obs_source_t *scene)
 	// Recording config can always be staged for the next recording.
 	apply_recording_config(p);
 	apply_recording_bitrate(p);
+
+	// Monitoring device is independent of the output pipeline; apply it always
+	// (it is safe even while recording/streaming).
+	apply_monitoring_device(p);
 
 	const VideoApplyResult vr = apply_video(p);
 
@@ -273,5 +400,12 @@ void aro_shutdown()
 		obs_weak_source_release(g_pending_restart_scene);
 		g_pending_restart_scene = nullptr;
 	}
+
+	// Undo any "mute to me" so the silent sentinel device is never left behind.
+	if (g_muted_to_me) {
+		restore_monitor_device();
+		g_muted_to_me = false;
+	}
+
 	g_status_reporter = nullptr;
 }

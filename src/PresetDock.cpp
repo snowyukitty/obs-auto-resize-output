@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -52,6 +53,15 @@ QSpinBox *makeResSpin(int defaultValue)
 	return s;
 }
 
+// obs_enum_audio_monitoring_devices callback: append each (name, id) to the
+// combo as (text=name, data=id). Returning true keeps the enumeration going.
+bool addMonitorDevice(void *data, const char *name, const char *id)
+{
+	auto *combo = static_cast<QComboBox *>(data);
+	combo->addItem(QString::fromUtf8(name ? name : ""), QString::fromUtf8(id ? id : ""));
+	return true;
+}
+
 } // namespace
 
 PresetDock::PresetDock(QWidget *parent) : QWidget(parent)
@@ -75,6 +85,30 @@ void PresetDock::buildUi()
 		for (QWidget *w : ws)
 			w->setToolTip(t);
 	};
+
+	// --- Global "mute to me" toggle ---------------------------------------
+	// Lives above the per-scene editor because it is a global, instant control.
+	m_muteToMe = new QPushButton();
+	m_muteToMe->setCheckable(true);
+	m_muteToMe->setToolTip(tr("<b>Mute to me</b><br>One click stops <i>you</i> from hearing monitored "
+				  "audio — the recording keeps capturing everything at full volume. Works "
+				  "instantly, even while recording, and applies to all scenes.<br><br>It "
+				  "routes OBS's monitoring to a silent device; your recording's audio path "
+				  "is never touched.<br><br>Tip: only affects audio you hear <i>through OBS "
+				  "monitoring</i> (sources set to \"Monitor and Output\"). Audio your system "
+				  "plays directly can't be muted this way without also muting the capture."));
+	m_muteToMe->setEnabled(obs_audio_monitoring_available());
+	m_muteToMe->setChecked(aro_mute_to_me_active());
+	m_muteToMe->setText(m_muteToMe->isChecked() ? tr("Muted to you — click to hear again")
+						    : tr("Mute to me (stop hearing; keep recording)"));
+	root->addWidget(m_muteToMe);
+
+	{
+		auto *line = new QFrame();
+		line->setFrameShape(QFrame::HLine);
+		line->setFrameShadow(QFrame::Sunken);
+		root->addWidget(line);
+	}
 
 	// --- Scene selector ---------------------------------------------------
 	{
@@ -229,6 +263,46 @@ void PresetDock::buildUi()
 	}
 	root->addWidget(m_recGroup);
 
+	// --- Audio monitoring -------------------------------------------------
+	m_audioGroup = new QGroupBox(tr("Audio monitoring (the device you hear)"));
+	{
+		auto *g = new QGridLayout(m_audioGroup);
+		int r = 0;
+
+		m_useMonitorDevice = new QCheckBox(tr("Monitoring device"));
+		m_monitorDevice = new QComboBox();
+		m_monitorDevice->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+		if (obs_audio_monitoring_available()) {
+			obs_enum_audio_monitoring_devices(addMonitorDevice, m_monitorDevice);
+		}
+		if (m_monitorDevice->count() == 0) {
+			// No devices (monitoring unavailable): keep the row usable but inert.
+			m_monitorDevice->addItem(tr("(audio monitoring unavailable)"), QString());
+			m_useMonitorDevice->setEnabled(false);
+			m_monitorDevice->setEnabled(false);
+		}
+		setTip(tr("<b>Audio monitoring device = what YOU hear</b><br>Chooses which "
+			  "playback device OBS sends <i>monitored</i> audio to. This is the "
+			  "listening path only — it is completely separate from recording, so "
+			  "it changes <b>instantly even while recording</b> and never alters "
+			  "what is recorded or how loud it is.<br><br>Use it to stop hearing a "
+			  "scene's audio (point monitoring at a device you are not listening "
+			  "to) while the recording keeps capturing it at full volume.<br><br>"
+			  "Note: only affects sources whose Audio Monitoring is set to "
+			  "\"Monitor and Output\" (or \"Monitor Only\") in OBS's audio mixer."),
+		       {m_useMonitorDevice, m_monitorDevice});
+		g->addWidget(m_useMonitorDevice, r, 0);
+		g->addWidget(m_monitorDevice, r, 1, 1, 3);
+		++r;
+
+		auto *amNote = new QLabel(tr("Applies immediately, even while recording. Does not "
+					     "change the recording itself (content or volume)."));
+		amNote->setWordWrap(true);
+		amNote->setStyleSheet("color: gray; font-size: 11px;");
+		g->addWidget(amNote, r, 0, 1, 4);
+	}
+	root->addWidget(m_audioGroup);
+
 	// --- Behaviour --------------------------------------------------------
 	m_restartRecording = new QCheckBox(tr("If recording when switching to this scene, restart "
 					      "recording to apply video changes (creates a new file)"));
@@ -268,10 +342,10 @@ void PresetDock::buildUi()
 	connect(m_sceneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 		&PresetDock::onEditSceneChanged);
 
-	const QList<QCheckBox *> checks = {m_enabled,          m_useBaseRes,   m_useOutputRes,   m_useFps,
-					   m_useRecPath,       m_useRecFormat, m_useAudioTracks, m_useRecBitrate,
-					   m_restartRecording, m_track[0],     m_track[1],       m_track[2],
-					   m_track[3],         m_track[4],     m_track[5]};
+	const QList<QCheckBox *> checks = {m_enabled,          m_useBaseRes,       m_useOutputRes,   m_useFps,
+					   m_useRecPath,       m_useRecFormat,     m_useAudioTracks, m_useRecBitrate,
+					   m_useMonitorDevice, m_restartRecording, m_track[0],       m_track[1],
+					   m_track[2],         m_track[3],         m_track[4],       m_track[5]};
 	for (QCheckBox *c : checks)
 		connect(c, &QCheckBox::toggled, this, &PresetDock::onFieldChanged);
 
@@ -281,10 +355,13 @@ void PresetDock::buildUi()
 
 	connect(m_recPath, &QLineEdit::textEdited, this, &PresetDock::onFieldChanged);
 	connect(m_recFormat, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &PresetDock::onFieldChanged);
+	connect(m_monitorDevice, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		&PresetDock::onFieldChanged);
 
 	connect(m_browse, &QPushButton::clicked, this, &PresetDock::onBrowsePath);
 	connect(m_copyFromCurrent, &QPushButton::clicked, this, &PresetDock::onCopyFromCurrent);
 	connect(m_applyNow, &QPushButton::clicked, this, &PresetDock::onApplyNow);
+	connect(m_muteToMe, &QPushButton::toggled, this, &PresetDock::onMuteToMeToggled);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,19 +406,38 @@ void PresetDock::refreshSceneList()
 
 void PresetDock::onProgramSceneChanged()
 {
-	// Follow the program scene so the dock shows what is currently live.
+	updateModeLabel();
+
+	// Only follow the live scene while the user hasn't pinned a different scene
+	// to edit (selecting the program scene again re-arms following).
+	if (!m_followProgram)
+		return;
+
 	obs_source_t *cur = obs_frontend_get_current_scene();
 	if (!cur)
 		return;
 	const int idx = m_sceneCombo->findText(QString::fromUtf8(obs_source_get_name(cur)));
 	obs_source_release(cur);
-	if (idx >= 0 && idx != m_sceneCombo->currentIndex())
+	if (idx >= 0 && idx != m_sceneCombo->currentIndex()) {
+		m_programmaticSceneChange = true;
 		m_sceneCombo->setCurrentIndex(idx); // triggers loadFromScene
-	updateModeLabel();
+		m_programmaticSceneChange = false;
+	}
 }
 
 void PresetDock::onEditSceneChanged(int)
 {
+	// A user-initiated selection decides whether we keep following the program
+	// scene: following resumes only when they pick the current program scene.
+	if (!m_programmaticSceneChange) {
+		obs_source_t *cur = obs_frontend_get_current_scene();
+		if (cur) {
+			const char *name = obs_source_get_name(cur);
+			m_followProgram = name && m_sceneCombo->currentText() == QString::fromUtf8(name);
+			obs_source_release(cur);
+		}
+	}
+
 	if (!m_loading)
 		loadFromScene();
 }
@@ -396,6 +492,23 @@ void PresetDock::loadFromScene()
 	m_useRecBitrate->setChecked(p.use_rec_bitrate);
 	m_recBitrate->setValue((int)p.rec_bitrate);
 
+	m_useMonitorDevice->setChecked(p.use_monitor_device);
+	{
+		int di = m_monitorDevice->findData(QString::fromStdString(p.monitor_device_id));
+		if (di < 0 && !p.monitor_device_id.empty()) {
+			// Saved device isn't currently present (e.g. unplugged). Keep it
+			// in the list so the preset still round-trips instead of silently
+			// switching to another device on the next edit.
+			m_monitorDevice->addItem(QString::fromStdString(p.monitor_device_name.empty()
+										? p.monitor_device_id
+										: p.monitor_device_name),
+						 QString::fromStdString(p.monitor_device_id));
+			di = m_monitorDevice->count() - 1;
+		}
+		if (di >= 0)
+			m_monitorDevice->setCurrentIndex(di);
+	}
+
 	m_restartRecording->setChecked(p.restart_recording);
 
 	m_loading = false;
@@ -441,6 +554,10 @@ void PresetDock::saveToScene()
 	p.use_rec_bitrate = m_useRecBitrate->isChecked();
 	p.rec_bitrate = (uint32_t)m_recBitrate->value();
 
+	p.use_monitor_device = m_useMonitorDevice->isChecked();
+	p.monitor_device_id = m_monitorDevice->currentData().toString().toStdString();
+	p.monitor_device_name = m_monitorDevice->currentText().toStdString();
+
 	p.restart_recording = m_restartRecording->isChecked();
 
 	preset_save(scene, p);
@@ -460,6 +577,7 @@ void PresetDock::updateEnabledState()
 	const bool on = m_enabled->isChecked();
 	m_videoGroup->setEnabled(on);
 	m_recGroup->setEnabled(on);
+	m_audioGroup->setEnabled(on);
 	m_restartRecording->setEnabled(on);
 
 	m_baseCx->setEnabled(m_useBaseRes->isChecked());
@@ -473,6 +591,10 @@ void PresetDock::updateEnabledState()
 	for (int i = 0; i < 6; ++i)
 		m_track[i]->setEnabled(m_useAudioTracks->isChecked());
 	m_recBitrate->setEnabled(m_useRecBitrate->isChecked());
+
+	const bool monAvail = obs_audio_monitoring_available();
+	m_useMonitorDevice->setEnabled(on && monAvail);
+	m_monitorDevice->setEnabled(on && monAvail && m_useMonitorDevice->isChecked());
 }
 
 void PresetDock::updateModeLabel()
@@ -530,6 +652,39 @@ void PresetDock::onCopyFromCurrent()
 		const uint32_t tracks = (uint32_t)config_get_int(cfg, section, "RecTracks");
 		for (int i = 0; i < 6; ++i)
 			m_track[i]->setChecked((tracks >> i) & 1u);
+
+		// Recording bitrate lives in recordEncoder.json (Advanced mode only).
+		if (advanced) {
+			char *profilePath = obs_frontend_get_current_profile_path();
+			if (profilePath) {
+				const std::string encPath = std::string(profilePath) + "/recordEncoder.json";
+				bfree(profilePath);
+				obs_data_t *enc = obs_data_create_from_json_file(encPath.c_str());
+				if (enc) {
+					const long long br = obs_data_get_int(enc, "bitrate");
+					if (br > 0)
+						m_recBitrate->setValue((int)br);
+					obs_data_release(enc);
+				}
+			}
+		}
+	}
+
+	// Current audio monitoring device. Skip while "mute to me" is active, since
+	// the live device is then the silent sentinel rather than a real choice.
+	if (obs_audio_monitoring_available() && !aro_mute_to_me_active()) {
+		const char *mdName = nullptr;
+		const char *mdId = nullptr;
+		obs_get_audio_monitoring_device(&mdName, &mdId);
+		if (mdId) {
+			int di = m_monitorDevice->findData(QString::fromUtf8(mdId));
+			if (di < 0) {
+				m_monitorDevice->addItem(QString::fromUtf8(mdName ? mdName : mdId),
+							 QString::fromUtf8(mdId));
+				di = m_monitorDevice->count() - 1;
+			}
+			m_monitorDevice->setCurrentIndex(di);
+		}
 	}
 
 	onFieldChanged();
@@ -555,6 +710,21 @@ void PresetDock::onApplyNow()
 	}
 	if (current)
 		obs_source_release(current);
+}
+
+void PresetDock::onMuteToMeToggled(bool checked)
+{
+	aro_set_mute_to_me(checked);
+
+	// Reflect the actual resulting state (set may be a no-op if monitoring is
+	// unavailable) and relabel for the next action.
+	const bool active = aro_mute_to_me_active();
+	if (active != checked) {
+		const QSignalBlocker block(m_muteToMe);
+		m_muteToMe->setChecked(active);
+	}
+	m_muteToMe->setText(active ? tr("Muted to you — click to hear again")
+				   : tr("Mute to me (stop hearing; keep recording)"));
 }
 
 void PresetDock::showStatus(const QString &message)
