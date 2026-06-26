@@ -17,6 +17,7 @@
 #endif
 
 #include <algorithm>
+#include <cwchar>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -31,9 +32,10 @@
 // Set when a video override is deferred until the current recording stops.
 static obs_weak_source_t *g_pending_restart_scene = nullptr;
 
-// "Mute to me" state. On Windows, this uses the same layer EarTrumpet uses:
-// the OBS process' Windows audio playback sessions. That silences monitoring
-// playback without touching OBS' internal recording/streaming audio path.
+// "Mute to me" state. On Windows, this uses the same layer EarTrumpet uses,
+// but only for OBS sessions on the current monitoring endpoint. That silences
+// what the user hears without touching OBS' internal recording/streaming path
+// or unrelated OBS sessions on other render devices.
 //
 // On non-Windows platforms we retain the older fallback of pointing OBS's
 // GLOBAL monitoring device at a sentinel. We deliberately do NOT toggle
@@ -64,6 +66,7 @@ static StatusReporter g_status_reporter;
 
 #ifdef _WIN32
 struct SavedAudioSessionMute {
+	std::wstring endpoint_id;
 	std::wstring instance_id;
 	bool muted = false;
 };
@@ -117,16 +120,68 @@ private:
 	bool m_uninit = false;
 };
 
-static SavedAudioSessionMute *find_saved_audio_session_mute(const std::wstring &instance_id)
+static SavedAudioSessionMute *find_saved_audio_session_mute(const std::wstring &endpoint_id,
+							    const std::wstring &instance_id)
 {
 	auto it = std::find_if(g_saved_audio_session_mutes.begin(), g_saved_audio_session_mutes.end(),
 			       [&](const SavedAudioSessionMute &saved) {
-				       return saved.instance_id == instance_id;
+				       return saved.endpoint_id == endpoint_id && saved.instance_id == instance_id;
 			       });
 	return it == g_saved_audio_session_mutes.end() ? nullptr : &*it;
 }
 
-template<typename Func> static bool for_each_obs_audio_session(Func &&func, int &matched_sessions)
+static std::wstring utf8_to_wide(const char *text)
+{
+	if (!text || !*text)
+		return {};
+
+	const int len = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
+	if (len <= 1)
+		return {};
+
+	std::wstring out((size_t)len, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, text, -1, out.data(), len);
+	out.resize((size_t)len - 1);
+	return out;
+}
+
+static std::wstring device_id_for_device(IMMDevice *device)
+{
+	if (!device)
+		return {};
+
+	LPWSTR raw_id = nullptr;
+	std::wstring id;
+	const HRESULT hr = device->GetId(&raw_id);
+	if (SUCCEEDED(hr) && raw_id)
+		id = raw_id;
+	if (raw_id)
+		CoTaskMemFree(raw_id);
+	return id;
+}
+
+static std::wstring current_monitoring_endpoint_id(IMMDeviceEnumerator *device_enum)
+{
+	if (!device_enum)
+		return {};
+
+	const char *monitor_id = nullptr;
+	obs_get_audio_monitoring_device(nullptr, &monitor_id);
+	if (monitor_id && *monitor_id && std::strcmp(monitor_id, "default") != 0)
+		return utf8_to_wide(monitor_id);
+
+	IMMDevice *default_device = nullptr;
+	const HRESULT hr = device_enum->GetDefaultAudioEndpoint(eRender, eConsole, &default_device);
+	if (FAILED(hr))
+		return {};
+
+	std::wstring id = device_id_for_device(default_device);
+	release_com(default_device);
+	return id;
+}
+
+template<typename Func>
+static bool for_each_obs_audio_session(Func &&func, int &matched_sessions, const std::wstring &target_endpoint_id)
 {
 	matched_sessions = 0;
 
@@ -169,6 +224,13 @@ template<typename Func> static bool for_each_obs_audio_session(Func &&func, int 
 		hr = devices->Item(i, &device);
 		if (FAILED(hr))
 			continue;
+
+		const std::wstring endpoint_id = device_id_for_device(device);
+		if (!target_endpoint_id.empty() &&
+		    (endpoint_id.empty() || _wcsicmp(endpoint_id.c_str(), target_endpoint_id.c_str()) != 0)) {
+			release_com(device);
+			continue;
+		}
 
 		IAudioSessionManager2 *manager = nullptr;
 		hr = device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr, (void **)&manager);
@@ -226,7 +288,7 @@ template<typename Func> static bool for_each_obs_audio_session(Func &&func, int 
 				instance_id = L"obs-session-" + std::to_wstring(matched_sessions);
 
 			++matched_sessions;
-			if (!func(volume, instance_id))
+			if (!func(volume, endpoint_id, instance_id))
 				ok = false;
 
 			release_com(volume);
@@ -246,11 +308,38 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 	if (mute && capture_previous)
 		g_saved_audio_session_mutes.clear();
 
+	std::wstring target_endpoint_id;
+	if (mute) {
+		ScopedComInit com;
+		if (!com.ok()) {
+			ARO_LOG(LOG_WARNING, "CoInitializeEx failed while locating OBS monitoring endpoint: 0x%08lX",
+				(unsigned long)com.result());
+			return false;
+		}
+
+		IMMDeviceEnumerator *device_enum = nullptr;
+		HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+					      IID_PPV_ARGS(&device_enum));
+		if (FAILED(hr)) {
+			ARO_LOG(LOG_WARNING, "Failed to create IMMDeviceEnumerator for monitoring endpoint: 0x%08lX",
+				(unsigned long)hr);
+			return false;
+		}
+
+		target_endpoint_id = current_monitoring_endpoint_id(device_enum);
+		release_com(device_enum);
+		if (target_endpoint_id.empty()) {
+			ARO_LOG(LOG_WARNING, "Could not resolve OBS monitoring endpoint for mute-to-me");
+			return false;
+		}
+	}
+
 	int matched_sessions = 0;
 	const bool ok = for_each_obs_audio_session(
-		[&](ISimpleAudioVolume *volume, const std::wstring &instance_id) {
+		[&](ISimpleAudioVolume *volume, const std::wstring &endpoint_id,
+		    const std::wstring &instance_id) {
 			if (mute) {
-				if (!find_saved_audio_session_mute(instance_id)) {
+				if (!find_saved_audio_session_mute(endpoint_id, instance_id)) {
 					BOOL was_muted = FALSE;
 					HRESULT hr = volume->GetMute(&was_muted);
 					if (FAILED(hr)) {
@@ -258,7 +347,7 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 							(unsigned long)hr);
 						return false;
 					}
-					g_saved_audio_session_mutes.push_back({instance_id, was_muted != FALSE});
+					g_saved_audio_session_mutes.push_back({endpoint_id, instance_id, was_muted != FALSE});
 				}
 
 				HRESULT hr = volume->SetMute(TRUE, nullptr);
@@ -270,8 +359,11 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 				return true;
 			}
 
-			const SavedAudioSessionMute *saved = find_saved_audio_session_mute(instance_id);
-			const BOOL restore_mute = saved && saved->muted ? TRUE : FALSE;
+			const SavedAudioSessionMute *saved = find_saved_audio_session_mute(endpoint_id, instance_id);
+			if (!saved)
+				return true;
+
+			const BOOL restore_mute = saved->muted ? TRUE : FALSE;
 			HRESULT hr = volume->SetMute(restore_mute, nullptr);
 			if (FAILED(hr)) {
 				ARO_LOG(LOG_WARNING, "Failed to restore OBS audio session mute state: 0x%08lX",
@@ -280,12 +372,12 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 			}
 			return true;
 		},
-		matched_sessions);
+		matched_sessions, mute ? target_endpoint_id : std::wstring());
 
 	if (!ok)
 		return false;
 
-	if (matched_sessions == 0) {
+	if (mute && matched_sessions == 0) {
 		ARO_LOG(LOG_WARNING, "No OBS Windows audio playback session found for mute-to-me");
 		return false;
 	}
