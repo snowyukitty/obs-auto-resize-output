@@ -108,10 +108,7 @@ public:
 			CoUninitialize();
 	}
 
-	bool ok() const
-	{
-		return SUCCEEDED(m_hr) || m_hr == RPC_E_CHANGED_MODE;
-	}
+	bool ok() const { return SUCCEEDED(m_hr) || m_hr == RPC_E_CHANGED_MODE; }
 
 	HRESULT result() const { return m_hr; }
 
@@ -318,8 +315,8 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 		}
 
 		IMMDeviceEnumerator *device_enum = nullptr;
-		HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
-					      IID_PPV_ARGS(&device_enum));
+		HRESULT hr =
+			CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&device_enum));
 		if (FAILED(hr)) {
 			ARO_LOG(LOG_WARNING, "Failed to create IMMDeviceEnumerator for monitoring endpoint: 0x%08lX",
 				(unsigned long)hr);
@@ -336,18 +333,19 @@ static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
 
 	int matched_sessions = 0;
 	const bool ok = for_each_obs_audio_session(
-		[&](ISimpleAudioVolume *volume, const std::wstring &endpoint_id,
-		    const std::wstring &instance_id) {
+		[&](ISimpleAudioVolume *volume, const std::wstring &endpoint_id, const std::wstring &instance_id) {
 			if (mute) {
 				if (!find_saved_audio_session_mute(endpoint_id, instance_id)) {
 					BOOL was_muted = FALSE;
 					HRESULT hr = volume->GetMute(&was_muted);
 					if (FAILED(hr)) {
-						ARO_LOG(LOG_WARNING, "Failed to read OBS audio session mute state: 0x%08lX",
+						ARO_LOG(LOG_WARNING,
+							"Failed to read OBS audio session mute state: 0x%08lX",
 							(unsigned long)hr);
 						return false;
 					}
-					g_saved_audio_session_mutes.push_back({endpoint_id, instance_id, was_muted != FALSE});
+					g_saved_audio_session_mutes.push_back(
+						{endpoint_id, instance_id, was_muted != FALSE});
 				}
 
 				HRESULT hr = volume->SetMute(TRUE, nullptr);
@@ -620,7 +618,8 @@ void aro_set_mute_to_me(bool mute)
 		if (set_windows_obs_audio_session_mute(true, true)) {
 			g_mute_backend = MuteBackend::WindowsAudioSession;
 			g_muted_to_me = true;
-			ARO_LOG(LOG_INFO, "Mute-to-me ON: muted OBS Windows audio playback sessions; recording unaffected");
+			ARO_LOG(LOG_INFO,
+				"Mute-to-me ON: muted OBS Windows audio playback sessions; recording unaffected");
 			report("Muted to you: OBS playback is muted in Windows. Recording continues at full volume.");
 			return;
 		}
@@ -655,7 +654,7 @@ void aro_set_mute_to_me(bool mute)
 			g_saved_audio_session_mutes.clear();
 		} else
 #endif
-		if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
+			if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
 			restore_monitor_device();
 		}
 		g_mute_backend = MuteBackend::None;
@@ -781,7 +780,7 @@ void aro_shutdown()
 			g_saved_audio_session_mutes.clear();
 		} else
 #endif
-		if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
+			if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
 			restore_monitor_device();
 		}
 		g_mute_backend = MuteBackend::None;

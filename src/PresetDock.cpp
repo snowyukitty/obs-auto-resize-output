@@ -643,30 +643,26 @@ void PresetDock::syncMuteToMeUi()
 {
 	const bool active = aro_mute_to_me_active();
 	const bool available = obs_audio_monitoring_available();
-	const QString text = !available
-				     ? (m_compactDockModeActive ? tr("Mute unavailable")
-								: tr("Mute to me unavailable"))
-				     : (m_compactDockModeActive
-						? (active ? tr("Hear") : tr("Mute"))
-						: (active ? tr("Muted to you — click to hear again")
-							  : tr("Mute to me (stop hearing; keep recording)")));
+	const QString text =
+		!available ? (m_compactDockModeActive ? tr("Mute unavailable") : tr("Mute to me unavailable"))
+			   : (m_compactDockModeActive ? (active ? tr("Hear") : tr("Mute"))
+						      : (active ? tr("Muted to you — click to hear again")
+								: tr("Mute to me (stop hearing; keep recording)")));
 	const QString tooltip =
-		!available
-			? (m_compactDockModeActive
-				   ? tr("<b>Mute to me unavailable</b><br>Audio monitoring is unavailable. "
-					"Right-click to show full settings.")
-				   : tr("<b>Mute to me unavailable</b><br>Audio monitoring is unavailable."))
-			: m_compactDockModeActive
-			? (active ? tr("<b>Muted to you</b><br>Click to hear monitored audio again. "
-				       "Right-click to show full settings.")
-				  : tr("<b>Mute to me</b><br>Click to stop hearing monitored audio. "
-				       "Recording is unchanged. Right-click to show full settings."))
-			: tr("<b>Mute to me</b><br>One click stops <i>you</i> from hearing monitored "
-			     "audio — the recording keeps capturing everything at full volume. Works "
-			     "instantly, even while recording, and applies to all scenes.<br><br>It "
-			     "mutes OBS's playback session on Windows (and uses a monitoring-device "
-			     "fallback on other platforms); your recording's audio path is never "
-			     "touched.<br><br>Right-click this button for compact dock options.");
+		!available                ? (m_compactDockModeActive
+						     ? tr("<b>Mute to me unavailable</b><br>Audio monitoring is unavailable. "
+									 "Right-click to show full settings.")
+						     : tr("<b>Mute to me unavailable</b><br>Audio monitoring is unavailable."))
+		: m_compactDockModeActive ? (active ? tr("<b>Muted to you</b><br>Click to hear monitored audio again. "
+							 "Right-click to show full settings.")
+						    : tr("<b>Mute to me</b><br>Click to stop hearing monitored audio. "
+							 "Recording is unchanged. Right-click to show full settings."))
+					  : tr("<b>Mute to me</b><br>One click stops <i>you</i> from hearing monitored "
+					       "audio — the recording keeps capturing everything at full volume. Works "
+					       "instantly, even while recording, and applies to all scenes.<br><br>It "
+					       "mutes OBS's playback session on Windows (and uses a monitoring-device "
+					       "fallback on other platforms); your recording's audio path is never "
+					       "touched.<br><br>Right-click this button for compact dock options.");
 
 	m_syncingMuteUi = true;
 	{
