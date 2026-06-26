@@ -38,8 +38,8 @@
   },
   "name": "obs-auto-resize-output",
   "displayName": "Auto Resize Output",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "snowyukitty",
-  "website": "https://github.com/snowyukitty/obs-auto-resize-output",
+  "website": "https://snowyukitty.github.io/obs-auto-resize-output/",
   "email": "snowyukitty@gmail.com"
 }

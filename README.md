@@ -58,6 +58,8 @@ If a sound is being played directly by the operating system to your headphones o
 
 ## Installation
 
+Download the latest release from [GitHub Releases](https://github.com/snowyukitty/obs-auto-resize-output/releases).
+
 Windows plugin layout:
 
 ```text

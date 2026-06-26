@@ -20,6 +20,17 @@ gh run list --workflow dispatch.yaml --limit 5
 gh run download <run-id> -D artifacts\<run-id>
 ```
 
+## Release Build
+
+Release artifacts are produced by pushing a semantic version tag:
+
+```powershell
+git tag 1.1.0
+git push origin 1.1.0
+```
+
+The tag workflow builds Windows, macOS, Ubuntu, and source artifacts, creates a draft GitHub Release, and uploads checksums. Review the generated artifacts before publishing the release.
+
 ## Local Windows Build
 
 Install:
