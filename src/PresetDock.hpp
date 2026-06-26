@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <QPoint>
 #include <QWidget>
 
 class QCheckBox;
@@ -16,7 +17,6 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
-class CompactMuteOverlay;
 
 struct obs_source;
 typedef struct obs_source obs_source_t;
@@ -40,7 +40,8 @@ private slots:
 	void onCopyFromCurrent();
 	void onApplyNow();
 	void onMuteToMeToggled(bool checked);
-	void onCompactOverlayToggled(bool checked);
+	void onCompactDockModeClicked();
+	void showMuteContextMenu(const QPoint &pos);
 
 private:
 	void buildUi();
@@ -50,10 +51,9 @@ private:
 	void updateModeLabel();
 	void setMuteToMeFromUi(bool checked);
 	void syncMuteToMeUi();
-	void setCompactOverlayVisible(bool visible, bool save);
-	void loadCompactOverlayState();
-	void saveCompactOverlayVisible(bool visible);
-	void saveCompactOverlayPosition();
+	void setCompactDockMode(bool compact, bool save);
+	void loadCompactDockMode();
+	void saveCompactDockMode(bool compact);
 	// Returns a new reference to the scene currently selected for editing,
 	// or nullptr. Caller must obs_source_release().
 	obs_source_t *editedScene() const;
@@ -66,12 +66,11 @@ private:
 	bool m_followProgram = true;
 	bool m_programmaticSceneChange = false;
 	bool m_syncingMuteUi = false;
-	bool m_syncingOverlayUi = false;
-	bool m_compactOverlayHasStoredPosition = false;
+	bool m_compactDockModeActive = false;
 
 	QPushButton *m_muteToMe = nullptr;
-	QPushButton *m_showCompactOverlay = nullptr;
-	CompactMuteOverlay *m_compactOverlay = nullptr;
+	QWidget *m_fullControls = nullptr;
+	QPushButton *m_compactDockMode = nullptr;
 	QComboBox *m_sceneCombo = nullptr;
 	QLabel *m_modeLabel = nullptr;
 	QLabel *m_statusLabel = nullptr;

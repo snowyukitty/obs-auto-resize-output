@@ -20,7 +20,7 @@ find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
 
 if(WIN32)
-    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ole32 user32)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ole32)
 endif()
 
 if(ENABLE_FRONTEND_API)

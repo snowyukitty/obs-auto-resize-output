@@ -20,7 +20,7 @@
 此外還有一個**全域**控制:
 
 - **「Mute to me」一鍵開關**(dock 最上方):一鍵讓**你自己**聽不到被監聽的音訊,但**錄製完全不受影響**(內容、音量都不變),錄製中也能隨時切。詳見〈音訊監聽〉。
-- **Compact mute overlay**:在 dock 頂部按 **Show compact mute overlay** 可開啟 always-on-top 小浮窗,只顯示 `Mute` / `Hear` 控制,可拖曳到 OBS 上方便操作。
+- **Compact dock mode**:在 dock 頂部按 **Compact dock mode** 後,Auto Resize Output 仍是 OBS 介面內可拖曳/停靠的 dock,但只顯示 `Mute` / `Hear` 控制。右鍵點 mute button 可恢復完整設定。
 
 > **設定是「進入該 scene 時套用」,不會自動還原。** 若 scene B 沒有覆寫某個欄位,該欄位會維持目前的值(也就是上一個 scene 設過的值),而不是回到 profile 預設。要讓某 scene 用特定值,就在該 scene 明確勾選並設定它。
 
@@ -105,7 +105,7 @@ cmake --build build --config RelWithDebInfo
 3. 勾選你想覆寫的項目並填值。可按「Copy from current OBS settings」用目前 OBS 設定快速帶入起始值(含錄製 bitrate 與監聽裝置)。
 4. 切換到該 scene 時會自動套用(閒置時連解析度都會即時改;監聽裝置即使錄製中也會即時切)。
 5. 想讓自己暫時聽不到(但繼續錄製)時,按 dock 最上方的 **「Mute to me」**;再按一次恢復。
-6. 若想用最小控制介面,按 **「Show compact mute overlay」** 開啟小浮窗;拖曳小浮窗到 OBS 上方即可。小浮窗狀態會和 dock 的 Mute to me 按鈕同步。
+6. 若想用最小控制介面,按 **「Compact dock mode」**;Auto Resize Output 會保留為 OBS dock,但只顯示 `Mute` / `Hear` 按鈕。右鍵點該按鈕選 **Show full settings** 可回到完整面板。
 
 ## 版本升級耐受性
 
