@@ -93,8 +93,9 @@ void PresetDock::buildUi()
 	m_muteToMe->setToolTip(tr("<b>Mute to me</b><br>One click stops <i>you</i> from hearing monitored "
 				  "audio — the recording keeps capturing everything at full volume. Works "
 				  "instantly, even while recording, and applies to all scenes.<br><br>It "
-				  "routes OBS's monitoring to a silent device; your recording's audio path "
-				  "is never touched.<br><br>Tip: only affects audio you hear <i>through OBS "
+				  "mutes OBS's playback session on Windows (and uses a monitoring-device "
+				  "fallback on other platforms); your recording's audio path is never "
+				  "touched.<br><br>Tip: only affects audio you hear <i>through OBS "
 				  "monitoring</i> (sources set to \"Monitor and Output\"). Audio your system "
 				  "plays directly can't be muted this way without also muting the capture."));
 	m_muteToMe->setEnabled(obs_audio_monitoring_available());
@@ -670,8 +671,9 @@ void PresetDock::onCopyFromCurrent()
 		}
 	}
 
-	// Current audio monitoring device. Skip while "mute to me" is active, since
-	// the live device is then the silent sentinel rather than a real choice.
+	// Skip while "mute to me" is active: on fallback platforms the live device
+	// may be the silent sentinel, and on Windows it is clearer not to overwrite
+	// the user's saved monitor-device choice during a muted state.
 	if (obs_audio_monitoring_available() && !aro_mute_to_me_active()) {
 		const char *mdName = nullptr;
 		const char *mdId = nullptr;

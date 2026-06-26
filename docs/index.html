@@ -339,19 +339,19 @@
 
     <section id="mute">
       <h3>「Mute to me」一鍵靜音(全域)</h3>
-      <p>面板<strong>最上方</strong>那顆按鈕。一鍵讓<strong>你自己</strong>瞬間聽不到所有被監聽的音訊,再按一次恢復 —— <strong>錄製全程不受影響</strong>(內容、音量都不變),錄製中也能隨時切。不需要為此複製任何 Scene。</p>
+      <p>面板<strong>最上方</strong>那顆按鈕。一鍵讓<strong>你自己</strong>瞬間聽不到所有被監聽的音訊,再按一次恢復 —— <strong>錄製全程不受影響</strong>(內容、音量都不變),錄製中也能隨時切。不需要為此複製任何 Scene。Windows 版會靜音 OBS 這個 process 的播放 session(類似 EarTrumpet mute <code>obs64.exe</code>),不會動到錄製路徑。</p>
       <ul>
         <li>按一下 → <span class="uichip">Muted to you — click to hear again</span>:你聽不到了。</li>
-        <li>再按一下 → 還原成你原本的監聽裝置。</li>
+        <li>再按一下 → 恢復聽得到。</li>
       </ul>
       <div class="callout tip">
         <span class="ttl">典型用法</span>
         <p>錄一段長影片時,中途你不想再聽那些聲音(吵、或想耳根清淨),按一下 Mute to me;觀眾/錄影檔<strong>完全不受影響</strong>。想聽了再按回來。</p>
       </div>
       <details>
-        <summary>技術說明:為什麼用「切換監聽裝置」而不是「切換每個來源的監聽類型」?</summary>
+        <summary>技術說明:為什麼不用「切換每個來源的監聽類型」?</summary>
         <p>因為 OBS 會在<strong>每次存檔</strong>(自動存檔、切換 Scene Collection、關閉前存檔)把每個來源的監聽類型寫進 Scene Collection,而關閉時的存檔發生在外掛能還原之前。若用「切換監聽類型」來靜音,一旦在靜音狀態下存檔/關閉,你原本的 <code>Monitor and Output</code> 設定就會被永久覆寫。</p>
-        <p>監聽<strong>裝置</strong>是單一全域值(不隨來源存檔),所以切換它是安全的。本外掛靜音時把監聽導向一個「靜默哨兵裝置」,並在解除時還原;若上次被強制關閉時仍處於靜音,下次啟動會自動把它重設回 Default。</p>
+        <p>Windows 版改用 OS audio session mute,也就是靜音 OBS 播給你的那個播放 session;解除時會還原原本的 session mute 狀態。非 Windows 平台才使用全域監聽裝置 fallback。</p>
       </details>
     </section>
 
@@ -384,7 +384,8 @@
       <h3>疑難排解 / FAQ</h3>
       <details>
         <summary>我按了 Mute to me,但還是聽得到聲音?</summary>
-        <p>那個聲音多半是<strong>系統直接播放</strong>的(不是經由 OBS 監聽)。請到混音器 → Advanced Audio Properties,把該音源的 Audio Monitoring 設成 <strong>Monitor and Output</strong>,Mute to me 才管得到。</p>
+        <p>若按鈕沒有維持在 muted 狀態、底部顯示找不到 active OBS playback session,請先讓 OBS monitoring 實際出聲,再按一次 Mute to me。</p>
+        <p>若按鈕已經顯示 muted 但你仍聽得到,那個聲音多半是<strong>系統直接播放</strong>的(不是經由 OBS 監聽)。請到混音器 → Advanced Audio Properties,把該音源的 Audio Monitoring 設成 <strong>Monitor and Output</strong>,Mute to me 才管得到。</p>
       </details>
       <details>
         <summary>切換 Scene 時解析度沒變?</summary>

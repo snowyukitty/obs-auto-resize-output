@@ -7,8 +7,22 @@
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <mmdeviceapi.h>
+#include <audiopolicy.h>
+#endif
+
+#include <algorithm>
 #include <cstring>
 #include <string>
+#include <utility>
+#ifdef _WIN32
+#include <vector>
+#endif
 
 // ---------------------------------------------------------------------------
 // Module-local state
@@ -17,28 +31,45 @@
 // Set when a video override is deferred until the current recording stops.
 static obs_weak_source_t *g_pending_restart_scene = nullptr;
 
-// "Mute to me" state. Implemented by pointing OBS's GLOBAL monitoring device at
-// a sentinel that resolves to no real device -> all monitoring goes silent,
-// while the recording/output path is untouched. We deliberately do NOT toggle
+// "Mute to me" state. On Windows, this uses the same layer EarTrumpet uses:
+// the OBS process' Windows audio playback sessions. That silences monitoring
+// playback without touching OBS' internal recording/streaming audio path.
+//
+// On non-Windows platforms we retain the older fallback of pointing OBS's
+// GLOBAL monitoring device at a sentinel. We deliberately do NOT toggle
 // per-source monitoring TYPE: obs_save_source() persists monitoring_type into
 // the scene collection on every save (auto-save, collection switch, and the
 // exit save, which runs before any restore hook), so a save while muted would
-// permanently wipe the user's "Monitor and Output" setup. The monitoring device
-// is a single global value (not saved per source), so switching it is safe.
+// permanently wipe the user's "Monitor and Output" setup.
+enum class MuteBackend {
+	None,
+	WindowsAudioSession,
+	SilentMonitorDevice,
+};
+
 static bool g_muted_to_me = false;
+static MuteBackend g_mute_backend = MuteBackend::None;
 // The device to return to on un-mute (captured when muting; updated if a scene
 // requests a different monitoring device while muted).
 static std::string g_saved_monitor_name;
 static std::string g_saved_monitor_id;
 
 // Sentinel monitoring device: a non-empty, non-"default" id that matches no real
-// device, so the monitor fails to initialize and produces silence (verified on
-// the WASAPI backend; worst case on other backends is that audio is still heard,
-// never data loss).
+// device. OBS accepts this value, but some monitor backends keep the old live
+// monitor if reset fails, so this is only a non-Windows fallback.
 static constexpr const char *kSilentMonitorName = "Auto Resize Output (muted to you)";
 static constexpr const char *kSilentMonitorId = "aro::muted-to-you::silent";
 
 static StatusReporter g_status_reporter;
+
+#ifdef _WIN32
+struct SavedAudioSessionMute {
+	std::wstring instance_id;
+	bool muted = false;
+};
+
+static std::vector<SavedAudioSessionMute> g_saved_audio_session_mutes;
+#endif
 
 void aro_set_status_reporter(StatusReporter reporter)
 {
@@ -50,6 +81,218 @@ static void report(const std::string &msg)
 	if (g_status_reporter)
 		g_status_reporter(msg);
 }
+
+#ifdef _WIN32
+template<typename T> static void release_com(T *&ptr)
+{
+	if (ptr) {
+		ptr->Release();
+		ptr = nullptr;
+	}
+}
+
+class ScopedComInit {
+public:
+	ScopedComInit()
+	{
+		m_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		m_uninit = SUCCEEDED(m_hr);
+	}
+
+	~ScopedComInit()
+	{
+		if (m_uninit)
+			CoUninitialize();
+	}
+
+	bool ok() const
+	{
+		return SUCCEEDED(m_hr) || m_hr == RPC_E_CHANGED_MODE;
+	}
+
+	HRESULT result() const { return m_hr; }
+
+private:
+	HRESULT m_hr = S_OK;
+	bool m_uninit = false;
+};
+
+static SavedAudioSessionMute *find_saved_audio_session_mute(const std::wstring &instance_id)
+{
+	auto it = std::find_if(g_saved_audio_session_mutes.begin(), g_saved_audio_session_mutes.end(),
+			       [&](const SavedAudioSessionMute &saved) {
+				       return saved.instance_id == instance_id;
+			       });
+	return it == g_saved_audio_session_mutes.end() ? nullptr : &*it;
+}
+
+template<typename Func> static bool for_each_obs_audio_session(Func &&func, int &matched_sessions)
+{
+	matched_sessions = 0;
+
+	ScopedComInit com;
+	if (!com.ok()) {
+		ARO_LOG(LOG_WARNING, "CoInitializeEx failed while muting OBS audio sessions: 0x%08lX",
+			(unsigned long)com.result());
+		return false;
+	}
+
+	IMMDeviceEnumerator *device_enum = nullptr;
+	HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&device_enum));
+	if (FAILED(hr)) {
+		ARO_LOG(LOG_WARNING, "Failed to create IMMDeviceEnumerator: 0x%08lX", (unsigned long)hr);
+		return false;
+	}
+
+	IMMDeviceCollection *devices = nullptr;
+	hr = device_enum->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices);
+	if (FAILED(hr)) {
+		ARO_LOG(LOG_WARNING, "Failed to enumerate render endpoints: 0x%08lX", (unsigned long)hr);
+		release_com(device_enum);
+		return false;
+	}
+
+	UINT device_count = 0;
+	hr = devices->GetCount(&device_count);
+	if (FAILED(hr)) {
+		ARO_LOG(LOG_WARNING, "Failed to count render endpoints: 0x%08lX", (unsigned long)hr);
+		release_com(devices);
+		release_com(device_enum);
+		return false;
+	}
+
+	const DWORD current_pid = GetCurrentProcessId();
+	bool ok = true;
+
+	for (UINT i = 0; i < device_count; ++i) {
+		IMMDevice *device = nullptr;
+		hr = devices->Item(i, &device);
+		if (FAILED(hr))
+			continue;
+
+		IAudioSessionManager2 *manager = nullptr;
+		hr = device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr, (void **)&manager);
+		release_com(device);
+		if (FAILED(hr))
+			continue;
+
+		IAudioSessionEnumerator *sessions = nullptr;
+		hr = manager->GetSessionEnumerator(&sessions);
+		release_com(manager);
+		if (FAILED(hr))
+			continue;
+
+		int session_count = 0;
+		hr = sessions->GetCount(&session_count);
+		if (FAILED(hr)) {
+			release_com(sessions);
+			continue;
+		}
+
+		for (int j = 0; j < session_count; ++j) {
+			IAudioSessionControl *control = nullptr;
+			hr = sessions->GetSession(j, &control);
+			if (FAILED(hr))
+				continue;
+
+			IAudioSessionControl2 *control2 = nullptr;
+			hr = control->QueryInterface(IID_PPV_ARGS(&control2));
+			release_com(control);
+			if (FAILED(hr))
+				continue;
+
+			DWORD pid = 0;
+			hr = control2->GetProcessId(&pid);
+			if (FAILED(hr) || pid != current_pid) {
+				release_com(control2);
+				continue;
+			}
+
+			ISimpleAudioVolume *volume = nullptr;
+			hr = control2->QueryInterface(IID_PPV_ARGS(&volume));
+			if (FAILED(hr)) {
+				release_com(control2);
+				continue;
+			}
+
+			LPWSTR raw_instance_id = nullptr;
+			std::wstring instance_id;
+			hr = control2->GetSessionInstanceIdentifier(&raw_instance_id);
+			if (SUCCEEDED(hr) && raw_instance_id)
+				instance_id = raw_instance_id;
+			if (raw_instance_id)
+				CoTaskMemFree(raw_instance_id);
+			if (instance_id.empty())
+				instance_id = L"obs-session-" + std::to_wstring(matched_sessions);
+
+			++matched_sessions;
+			if (!func(volume, instance_id))
+				ok = false;
+
+			release_com(volume);
+			release_com(control2);
+		}
+
+		release_com(sessions);
+	}
+
+	release_com(devices);
+	release_com(device_enum);
+	return ok;
+}
+
+static bool set_windows_obs_audio_session_mute(bool mute, bool capture_previous)
+{
+	if (mute && capture_previous)
+		g_saved_audio_session_mutes.clear();
+
+	int matched_sessions = 0;
+	const bool ok = for_each_obs_audio_session(
+		[&](ISimpleAudioVolume *volume, const std::wstring &instance_id) {
+			if (mute) {
+				if (!find_saved_audio_session_mute(instance_id)) {
+					BOOL was_muted = FALSE;
+					HRESULT hr = volume->GetMute(&was_muted);
+					if (FAILED(hr)) {
+						ARO_LOG(LOG_WARNING, "Failed to read OBS audio session mute state: 0x%08lX",
+							(unsigned long)hr);
+						return false;
+					}
+					g_saved_audio_session_mutes.push_back({instance_id, was_muted != FALSE});
+				}
+
+				HRESULT hr = volume->SetMute(TRUE, nullptr);
+				if (FAILED(hr)) {
+					ARO_LOG(LOG_WARNING, "Failed to mute OBS audio session: 0x%08lX",
+						(unsigned long)hr);
+					return false;
+				}
+				return true;
+			}
+
+			const SavedAudioSessionMute *saved = find_saved_audio_session_mute(instance_id);
+			const BOOL restore_mute = saved && saved->muted ? TRUE : FALSE;
+			HRESULT hr = volume->SetMute(restore_mute, nullptr);
+			if (FAILED(hr)) {
+				ARO_LOG(LOG_WARNING, "Failed to restore OBS audio session mute state: 0x%08lX",
+					(unsigned long)hr);
+				return false;
+			}
+			return true;
+		},
+		matched_sessions);
+
+	if (!ok)
+		return false;
+
+	if (matched_sessions == 0) {
+		ARO_LOG(LOG_WARNING, "No OBS Windows audio playback session found for mute-to-me");
+		return false;
+	}
+
+	return true;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Recording config (profile config_t)
@@ -151,9 +394,11 @@ static void apply_monitoring_device(const ScenePreset &p)
 		return;
 	}
 
-	// While "mute to me" is active the live device must stay on the silent
-	// sentinel; remember the scene's choice as the device to restore on un-mute.
-	if (g_muted_to_me) {
+	// While using the fallback silent monitoring device, the live device must
+	// stay on the sentinel; remember the scene's choice as the device to
+	// restore on un-mute. Windows audio-session mute can safely let the device
+	// change, then re-apply the process-session mute.
+	if (g_muted_to_me && g_mute_backend == MuteBackend::SilentMonitorDevice) {
 		g_saved_monitor_name = p.monitor_device_name;
 		g_saved_monitor_id = p.monitor_device_id;
 		ARO_LOG(LOG_INFO, "Muted to you: deferring scene monitor device '%s' until un-mute",
@@ -161,12 +406,17 @@ static void apply_monitoring_device(const ScenePreset &p)
 		return;
 	}
 
-	if (obs_set_audio_monitoring_device(p.monitor_device_name.c_str(), p.monitor_device_id.c_str()))
+	if (obs_set_audio_monitoring_device(p.monitor_device_name.c_str(), p.monitor_device_id.c_str())) {
 		ARO_LOG(LOG_INFO, "Set audio monitoring device to '%s'",
 			p.monitor_device_name.empty() ? p.monitor_device_id.c_str() : p.monitor_device_name.c_str());
-	else
+#ifdef _WIN32
+		if (g_muted_to_me && g_mute_backend == MuteBackend::WindowsAudioSession)
+			set_windows_obs_audio_session_mute(true, false);
+#endif
+	} else {
 		ARO_LOG(LOG_WARNING, "Failed to set audio monitoring device to '%s' (id '%s')",
 			p.monitor_device_name.c_str(), p.monitor_device_id.c_str());
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +524,24 @@ void aro_set_mute_to_me(bool mute)
 		return;
 
 	if (mute) {
+#ifdef _WIN32
+		if (set_windows_obs_audio_session_mute(true, true)) {
+			g_mute_backend = MuteBackend::WindowsAudioSession;
+			g_muted_to_me = true;
+			ARO_LOG(LOG_INFO, "Mute-to-me ON: muted OBS Windows audio playback sessions; recording unaffected");
+			report("Muted to you: OBS playback is muted in Windows. Recording continues at full volume.");
+			return;
+		}
+
+		if (!g_saved_audio_session_mutes.empty()) {
+			set_windows_obs_audio_session_mute(false, false);
+			g_saved_audio_session_mutes.clear();
+		}
+
+		ARO_LOG(LOG_WARNING, "Mute-to-me could not find/mute an OBS Windows audio playback session");
+		report("Could not mute to you: Windows has no active OBS playback session to mute. Start monitored audio, then try again.");
+		return;
+#else
 		// Remember the device we're currently listening on, then send
 		// monitoring to the silent sentinel. The output/encoder path is
 		// untouched, so recording continues unchanged.
@@ -283,13 +551,24 @@ void aro_set_mute_to_me(bool mute)
 		g_saved_monitor_name = curName ? curName : "";
 		g_saved_monitor_id = curId ? curId : "";
 		obs_set_audio_monitoring_device(kSilentMonitorName, kSilentMonitorId);
+		g_mute_backend = MuteBackend::SilentMonitorDevice;
 		g_muted_to_me = true;
 		ARO_LOG(LOG_INFO, "Mute-to-me ON: monitoring silenced; recording unaffected");
 		report("Muted to you: you no longer hear monitored audio. Recording continues at full volume.");
+#endif
 	} else {
-		restore_monitor_device();
+#ifdef _WIN32
+		if (g_mute_backend == MuteBackend::WindowsAudioSession) {
+			set_windows_obs_audio_session_mute(false, false);
+			g_saved_audio_session_mutes.clear();
+		} else
+#endif
+		if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
+			restore_monitor_device();
+		}
+		g_mute_backend = MuteBackend::None;
 		g_muted_to_me = false;
-		ARO_LOG(LOG_INFO, "Mute-to-me OFF: restored monitoring device");
+		ARO_LOG(LOG_INFO, "Mute-to-me OFF: monitoring playback restored");
 		report("Unmuted to you: monitoring restored.");
 	}
 }
@@ -401,9 +680,19 @@ void aro_shutdown()
 		g_pending_restart_scene = nullptr;
 	}
 
-	// Undo any "mute to me" so the silent sentinel device is never left behind.
+	// Undo any "mute to me" so OBS playback/session state is not left muted by
+	// this plugin.
 	if (g_muted_to_me) {
-		restore_monitor_device();
+#ifdef _WIN32
+		if (g_mute_backend == MuteBackend::WindowsAudioSession) {
+			set_windows_obs_audio_session_mute(false, false);
+			g_saved_audio_session_mutes.clear();
+		} else
+#endif
+		if (g_mute_backend == MuteBackend::SilentMonitorDevice) {
+			restore_monitor_device();
+		}
+		g_mute_backend = MuteBackend::None;
 		g_muted_to_me = false;
 	}
 
