@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // obs-auto-resize-output
-// Per-scene recording / output settings for OBS Studio.
+// Per-scene output, recording, and monitoring presets for OBS Studio.
 //
 // On scene change the active scene's preset (stored in the scene source's
 // private_settings) is applied: output/base resolution & FPS via
-// obs_reset_video(), and recording folder/format/audio-tracks via the profile
-// config for the next recording. Presets travel with a scene when it is
-// duplicated, because libobs copies private_settings during duplication.
+// obs_reset_video(), recording folder/format/audio-tracks via the profile
+// config for the next recording, and audio monitoring changes via frontend
+// monitoring APIs. Presets travel with a scene when it is duplicated, because
+// libobs copies private_settings during duplication.
 
 #include "PresetDock.hpp"
 #include "ApplyPreset.hpp"
@@ -80,8 +81,8 @@ void on_frontend_event(enum obs_frontend_event event, void *)
 
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return "Per-scene recording and output settings (resolution, FPS, "
-	       "recording folder/format/audio tracks).";
+	return "Per-scene output, recording, and audio monitoring presets "
+	       "(resolution, FPS, recording folder/format/tracks, mute-to-me).";
 }
 
 MODULE_EXPORT const char *obs_module_name(void)

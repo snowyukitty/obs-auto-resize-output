@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Auto Resize Output — 使用說明</title>
-<meta name="description" content="OBS Studio 外掛 Auto Resize Output 的完整使用說明：每個 Scene 各自的解析度／FPS／錄製設定，以及音訊監聽裝置與「Mute to me」一鍵靜音。" />
+<title>Auto Resize Output - User Guide</title>
+<meta name="description" content="User guide for Auto Resize Output, an OBS Studio plugin for per-scene output, recording, and monitoring presets." />
 <style>
   :root {
     --bg: #0f1115;
@@ -19,110 +19,181 @@
     --amber: #e0a93b;
     --red: #e2615a;
     --code-bg: #11141a;
-    --radius: 12px;
-    --maxw: 860px;
+    --radius: 10px;
+    --maxw: 900px;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --border: #e1e4ea;
-      --text: #1d2129; --muted: #5c6573; --accent: #2f6bdc; --accent-soft: #e8f0ff;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-2: #f0f2f5;
+      --border: #e1e4ea;
+      --text: #1d2129;
+      --muted: #5c6573;
+      --accent: #2f6bdc;
+      --accent-soft: #e8f0ff;
       --code-bg: #f2f4f7;
     }
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; scroll-padding-top: 80px; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.7; font-size: 16px; -webkit-font-smoothing: antialiased;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  code, kbd { font-family: "SFMono-Regular", "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.88em; }
-  code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 6px; border: 1px solid var(--border); }
-  kbd { background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; padding: 0.1em 0.45em; }
-
-  /* Top bar */
+  code, kbd {
+    font-family: "SFMono-Regular", "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .9em;
+  }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .12em .38em;
+  }
   header.topbar {
-    position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
   }
-  .topbar-inner { max-width: 1180px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
+  .topbar-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
   .logo {
-    width: 38px; height: 38px; border-radius: 9px; flex: none;
-    background: linear-gradient(135deg, var(--accent), #7a4fff);
-    display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #2f6bdc, #3fb98c);
+    font-weight: 800;
   }
-  .topbar h1 { font-size: 1.05rem; margin: 0; font-weight: 700; letter-spacing: .2px; }
-  .topbar .ver { color: var(--muted); font-size: .8rem; font-weight: 500; }
+  .topbar h1 { font-size: 1.05rem; margin: 0; }
+  .topbar .ver { color: var(--muted); font-size: .82rem; }
   .topbar .spacer { flex: 1; }
-  .topbar .ghlink { color: var(--muted); font-size: .85rem; }
-
-  .layout { max-width: 1180px; margin: 0 auto; display: flex; gap: 40px; padding: 0 24px; }
-
-  /* Sidebar nav */
-  nav.toc {
-    width: 240px; flex: none; position: sticky; top: 80px; align-self: flex-start;
-    max-height: calc(100vh - 100px); overflow: auto; padding: 28px 0; font-size: .9rem;
+  .topbar .ghlink { color: var(--muted); font-size: .88rem; }
+  .layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    gap: 40px;
+    padding: 0 24px;
   }
-  nav.toc h2 { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 18px 0 8px; }
-  nav.toc a { display: block; color: var(--muted); padding: 5px 12px; border-radius: 7px; border-left: 2px solid transparent; }
-  nav.toc a:hover { color: var(--text); background: var(--surface); text-decoration: none; }
-
-  main { flex: 1; min-width: 0; max-width: var(--maxw); padding: 28px 0 96px; }
-
-  .hero { padding: 18px 0 8px; }
-  .hero h2 { font-size: 2rem; line-height: 1.25; margin: .2em 0 .3em; letter-spacing: -.01em; }
-  .hero p.lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  nav.toc {
+    width: 250px;
+    flex: none;
+    position: sticky;
+    top: 80px;
+    align-self: flex-start;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    padding: 28px 0;
+    font-size: .92rem;
+  }
+  nav.toc h2 {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+    margin: 18px 0 8px;
+  }
+  nav.toc a {
+    display: block;
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 7px;
+    border-left: 2px solid transparent;
+  }
+  nav.toc a:hover {
+    color: var(--text);
+    background: var(--surface);
+    text-decoration: none;
+  }
+  main {
+    flex: 1;
+    min-width: 0;
+    max-width: var(--maxw);
+    padding: 28px 0 96px;
+  }
+  .hero { padding: 18px 0 10px; }
+  .hero h2 { font-size: 2rem; line-height: 1.2; margin: .2em 0 .35em; }
+  .hero p.lead { color: var(--muted); font-size: 1.08rem; margin: 0; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
-  .pill { background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 5px 12px; font-size: .82rem; }
-
+  .pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: .82rem;
+  }
   section { scroll-margin-top: 80px; padding: 18px 0; border-top: 1px solid var(--border); }
   section:first-of-type { border-top: none; }
-  h3 { font-size: 1.4rem; margin: .6em 0 .4em; letter-spacing: -.01em; }
-  h4 { font-size: 1.06rem; margin: 1.3em 0 .3em; }
+  h3 { font-size: 1.35rem; margin: .55em 0 .35em; }
+  h4 { font-size: 1.05rem; margin: 1.25em 0 .25em; }
   p { margin: .6em 0; }
-  ul, ol { padding-left: 1.4em; }
-  li { margin: .35em 0; }
-
-  .callout { border-radius: var(--radius); padding: 14px 16px 14px 46px; margin: 16px 0; position: relative; border: 1px solid var(--border); background: var(--surface); }
-  .callout::before { position: absolute; left: 14px; top: 13px; font-size: 1.1rem; }
-  .callout p { margin: .3em 0; }
-  .callout .ttl { font-weight: 700; display: block; margin-bottom: 2px; }
-  .callout.note { border-left: 3px solid var(--accent); }
-  .callout.note::before { content: "ℹ️"; }
-  .callout.tip { border-left: 3px solid var(--green); }
-  .callout.tip::before { content: "💡"; }
-  .callout.warn { border-left: 3px solid var(--amber); }
-  .callout.warn::before { content: "⚠️"; }
-  .callout.danger { border-left: 3px solid var(--red); }
-  .callout.danger::before { content: "🛑"; }
-
+  ul, ol { padding-left: 1.35em; }
+  li { margin: .34em 0; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: .92rem; }
   th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
   th { background: var(--surface-2); font-weight: 600; }
   tr:nth-child(even) td { background: color-mix(in srgb, var(--surface) 60%, transparent); }
-
-  .steps { counter-reset: step; list-style: none; padding-left: 0; }
-  .steps > li { counter-increment: step; position: relative; padding-left: 44px; margin: 14px 0; }
-  .steps > li::before {
-    content: counter(step); position: absolute; left: 0; top: 0; width: 30px; height: 30px;
-    background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
-    border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .9rem;
+  .callout {
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin: 16px 0;
+    border: 1px solid var(--border);
+    background: var(--surface);
   }
-
-  .uichip { display: inline-block; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-weight: 600; font-size: .9em; white-space: nowrap; }
-
-  figure { margin: 22px 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .callout.note { border-left: 3px solid var(--accent); }
+  .callout.tip { border-left: 3px solid var(--green); }
+  .callout.warn { border-left: 3px solid var(--amber); }
+  .callout.danger { border-left: 3px solid var(--red); }
+  .callout .ttl { display: block; font-weight: 700; margin-bottom: 2px; }
+  .uichip {
+    display: inline-block;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 7px;
+    font-weight: 600;
+    font-size: .9em;
+    white-space: nowrap;
+  }
+  figure {
+    margin: 22px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
   figure svg { width: 100%; height: auto; display: block; }
-  figcaption { color: var(--muted); font-size: .85rem; margin-top: 10px; text-align: center; }
-
-  details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 16px; margin: 10px 0; }
+  figcaption { color: var(--muted); font-size: .86rem; margin-top: 10px; text-align: center; }
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px 16px;
+    margin: 10px 0;
+  }
   details summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
   details[open] summary { border-bottom: 1px solid var(--border); margin-bottom: 8px; }
-
-  footer { border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; padding: 24px; text-align: center; }
-
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-size: .86rem; padding: 24px; text-align: center; }
   @media (max-width: 900px) {
     nav.toc { display: none; }
     .layout { padding: 0 18px; }
@@ -130,164 +201,141 @@
 </style>
 </head>
 <body>
-
 <header class="topbar">
   <div class="topbar-inner">
     <div class="logo">AR</div>
     <div>
       <h1>Auto Resize Output</h1>
-      <span class="ver">OBS Studio 外掛 · 使用說明 · v1.0.0</span>
+      <span class="ver">OBS Studio plugin guide</span>
     </div>
     <div class="spacer"></div>
-    <a class="ghlink" href="https://github.com/snowyukitty/obs-auto-resize-output" target="_blank" rel="noopener">GitHub ↗</a>
+    <a class="ghlink" href="https://github.com/snowyukitty/obs-auto-resize-output" target="_blank" rel="noopener">GitHub</a>
   </div>
 </header>
 
 <div class="layout">
-
-  <nav class="toc" aria-label="目錄">
-    <h2>開始</h2>
-    <a href="#intro">這個外掛在做什麼</a>
-    <a href="#install">安裝 / 開啟面板</a>
-    <a href="#dock">面板總覽</a>
-    <h2>每個 Scene 的設定</h2>
-    <a href="#enable">啟用覆寫</a>
-    <a href="#video">影像：解析度 / FPS</a>
-    <a href="#recording">錄製：資料夾 / 格式 / 音軌 / 位元率</a>
-    <a href="#actions">Copy / Apply 按鈕</a>
-    <h2>音訊監聽</h2>
-    <a href="#audio-concept">先搞懂：監聽 vs 錄製</a>
-    <a href="#monitor-device">每個 Scene 的監聽裝置</a>
-    <a href="#mute">「Mute to me」一鍵靜音</a>
-    <h2>其他</h2>
-    <a href="#limits">重要限制</a>
-    <a href="#workflows">實用情境</a>
-    <a href="#faq">疑難排解 / FAQ</a>
+  <nav class="toc" aria-label="Table of contents">
+    <h2>Start</h2>
+    <a href="#intro">What it does</a>
+    <a href="#install">Install</a>
+    <a href="#dock">Dock overview</a>
+    <h2>Presets</h2>
+    <a href="#enable">Enable overrides</a>
+    <a href="#video">Video</a>
+    <a href="#recording">Recording</a>
+    <a href="#actions">Actions</a>
+    <h2>Monitoring</h2>
+    <a href="#audio-concept">Monitoring vs recording</a>
+    <a href="#monitor-device">Monitoring device</a>
+    <a href="#mute">Mute to me</a>
+    <h2>Reference</h2>
+    <a href="#limits">Limits</a>
+    <a href="#workflows">Workflows</a>
+    <a href="#faq">FAQ</a>
   </nav>
 
   <main>
     <div class="hero">
-      <h2>讓每個 Scene 各自決定輸出與錄製方式</h2>
-      <p class="lead">切換 Scene 就自動套用該 Scene 的解析度、FPS、錄製資料夾、格式、音軌、位元率;還能控制「你自己聽到的聲音」而完全不影響錄製。</p>
+      <h2>Per-scene output, recording, and monitoring presets for OBS Studio</h2>
+      <p class="lead">Switch scenes and automatically apply that scene's resolution, FPS, recording folder, format, tracks, bitrate, and monitoring device. A global mute control lets you stop hearing monitored audio without changing the recording.</p>
       <div class="pills">
-        <span class="pill">每個 Scene 獨立設定</span>
-        <span class="pill">複製 Scene 設定跟著走</span>
-        <span class="pill">錄製中可調監聽</span>
-        <span class="pill">一鍵靜音給自己</span>
+        <span class="pill">Per-scene presets</span>
+        <span class="pill">Scene duplication friendly</span>
+        <span class="pill">Monitoring-safe mute</span>
+        <span class="pill">Compact OBS dock</span>
       </div>
     </div>
 
     <section id="intro">
-      <h3>這個外掛在做什麼</h3>
-      <p>OBS 本身的輸出/錄製設定是<strong>全域</strong>的:整個設定檔共用一組解析度、FPS、錄製資料夾……。本外掛讓你<strong>為每一個 Scene 分別設定</strong>這些東西,切到該 Scene 時自動套用。</p>
-      <p>設定直接存在 Scene source 的 <code>private_settings</code> 裡,因此:</p>
-      <ul>
-        <li><strong>複製 Scene</strong> → 設定自動一起複製。</li>
-        <li><strong>存檔</strong> → 設定隨 Scene Collection 一起存,不需要額外檔案。</li>
-      </ul>
+      <h3>What It Does</h3>
+      <p>OBS output and recording settings are normally profile-wide. Auto Resize Output lets each scene store the settings it should apply when that scene becomes active.</p>
+      <p>Presets are stored in the scene source's <code>private_settings</code>, so they are saved with the scene collection and copied when a scene is duplicated.</p>
       <div class="callout note">
-        <span class="ttl">設計原則:進入該 Scene 時「套用」,不會自動還原</span>
-        <p>若 Scene B 沒有勾選某個欄位,該欄位會<strong>維持目前的值</strong>(也就是上一個 Scene 設過的),而不是回到預設。要讓某個 Scene 用特定值,就在該 Scene 明確勾選並填好它。</p>
+        <span class="ttl">Scene presets apply when entering a scene</span>
+        <p>The plugin does not automatically restore values from a previous scene. If Scene B does not override FPS, the current FPS remains whatever it already was. To make a scene use a value, explicitly enable and set that override for the scene.</p>
       </div>
     </section>
 
     <section id="install">
-      <h3>安裝 / 開啟面板</h3>
-      <p>把外掛安裝到 OBS 的外掛資料夾(Windows):</p>
+      <h3>Install</h3>
+      <p>Close OBS before replacing the DLL. On Windows, install the plugin files here:</p>
       <table>
-        <tr><th>檔案</th><th>位置</th></tr>
-        <tr><td>外掛 DLL</td><td><code>%ProgramData%\obs-studio\plugins\obs-auto-resize-output\bin\64bit\obs-auto-resize-output.dll</code></td></tr>
-        <tr><td>語系檔</td><td><code>%ProgramData%\obs-studio\plugins\obs-auto-resize-output\data\locale\en-US.ini</code></td></tr>
+        <tr><th>File</th><th>Destination</th></tr>
+        <tr><td>Plugin DLL</td><td><code>%ProgramData%\obs-studio\plugins\obs-auto-resize-output\bin\64bit\obs-auto-resize-output.dll</code></td></tr>
+        <tr><td>Locale file</td><td><code>%ProgramData%\obs-studio\plugins\obs-auto-resize-output\data\locale\en-US.ini</code></td></tr>
       </table>
-      <ol class="steps">
-        <li><strong>完全關閉 OBS</strong>(安裝/更新 DLL 時 OBS 不能開著,否則檔案被鎖住)。</li>
-        <li>把 DLL 與 <code>data/</code> 放到上述位置。</li>
-        <li>開啟 OBS,從上方選單 <span class="uichip">Docks</span> → 勾選 <span class="uichip">Auto Resize Output</span>,面板就會出現(可拖曳停靠到任意位置)。</li>
+      <ol>
+        <li>Start OBS.</li>
+        <li>Open <span class="uichip">Docks</span>.</li>
+        <li>Enable <span class="uichip">Auto Resize Output</span>.</li>
       </ol>
     </section>
 
     <section id="dock">
-      <h3>面板總覽</h3>
-      <p>面板由上到下分成幾個區塊:</p>
+      <h3>Dock Overview</h3>
       <table>
-        <tr><th>區塊</th><th>作用</th></tr>
-        <tr><td><span class="uichip">Mute to me</span> 按鈕(最上方)</td><td><strong>全域</strong>一鍵開關:讓你自己聽不到監聽音訊,錄製不受影響。見 <a href="#mute">這裡</a>。</td></tr>
-        <tr><td><span class="uichip">Compact dock mode</span></td><td>讓 Auto Resize Output 保持為 OBS 介面內的可拖曳/停靠 dock,但只顯示 Mute/Hear 控制;右鍵 mute button 可恢復完整設定。</td></tr>
-        <tr><td><span class="uichip">Editing scene</span> 下拉</td><td>選擇要<em>編輯</em>哪個 Scene 的設定。預設跟隨目前直播中的 Scene。</td></tr>
-        <tr><td><span class="uichip">Enable per-scene overrides</span></td><td>該 Scene 的總開關。關閉時整個 Scene 不套用任何覆寫。</td></tr>
-        <tr><td><span class="uichip">Video</span> 群組</td><td>基底/輸出解析度、FPS(僅在閒置時生效)。</td></tr>
-        <tr><td><span class="uichip">Recording</span> 群組</td><td>錄製資料夾、格式、音軌、影像位元率(套用到下一次錄製)。</td></tr>
-        <tr><td><span class="uichip">Audio monitoring</span> 群組</td><td>該 Scene 的監聽裝置(錄製中也能即時切)。</td></tr>
-        <tr><td>底部按鈕</td><td><span class="uichip">Copy from current OBS settings</span> 與 <span class="uichip">Apply now</span>。</td></tr>
+        <tr><th>Control</th><th>Purpose</th></tr>
+        <tr><td><span class="uichip">Mute to me</span></td><td>Global toggle that stops you from hearing OBS-monitored audio while recording remains unchanged.</td></tr>
+        <tr><td><span class="uichip">Compact dock mode</span></td><td>Collapses the OBS dock to only the mute button. Right-click the compact button and choose <span class="uichip">Show full settings</span> to expand again.</td></tr>
+        <tr><td><span class="uichip">Editing scene</span></td><td>Selects which scene preset you are editing. The dock follows the program scene until you manually select another scene.</td></tr>
+        <tr><td><span class="uichip">Enable per-scene overrides</span></td><td>Master switch for the selected scene preset.</td></tr>
+        <tr><td><span class="uichip">Video</span></td><td>Base resolution, output resolution, and FPS overrides.</td></tr>
+        <tr><td><span class="uichip">Recording</span></td><td>Recording folder, format, tracks, and bitrate overrides for the next recording.</td></tr>
+        <tr><td><span class="uichip">Audio monitoring</span></td><td>Per-scene monitoring device selection.</td></tr>
       </table>
-      <div class="callout tip">
-        <span class="ttl">面板不會再「搶走」你的選擇</span>
-        <p>當你手動在下拉選了「別的 Scene」來編輯時,即使你切換了直播 Scene,面板也<strong>不會跳走</strong>,方便你安心編輯。等你再選回目前直播中的 Scene,就會恢復自動跟隨。</p>
-      </div>
     </section>
 
     <section id="enable">
-      <h3>啟用覆寫</h3>
-      <ol class="steps">
-        <li>在 <span class="uichip">Editing scene</span> 選好要設定的 Scene。</li>
-        <li>勾選 <span class="uichip">Enable per-scene overrides for this scene</span>。</li>
-        <li>只勾選你<strong>真正想覆寫</strong>的項目並填值;沒勾的項目會沿用目前狀態。</li>
+      <h3>Enable Overrides</h3>
+      <ol>
+        <li>Select a scene in <span class="uichip">Editing scene</span>.</li>
+        <li>Enable <span class="uichip">Enable per-scene overrides for this scene</span>.</li>
+        <li>Check only the fields this scene should override.</li>
+        <li>Change values. The preset is saved as you edit.</li>
       </ol>
-      <p>每個欄位前面都有自己的勾選框 —— 勾了才會被套用。所有欄位上都有滑鼠停留提示(tooltip),會解釋該設定的意義。</p>
     </section>
 
     <section id="video">
-      <h3>影像:解析度 / FPS</h3>
+      <h3>Video</h3>
       <table>
-        <tr><th>設定</th><th>意義</th></tr>
-        <tr><td><span class="uichip">Base (canvas) resolution</span></td><td>OBS 合成畫布的整體大小(預覽看到的範圍)。</td></tr>
-        <tr><td><span class="uichip">Output (scaled) resolution</span></td><td>實際錄下來的像素尺寸 = <strong>清晰度 / 畫面大小</strong>。畫布會被縮放到這個尺寸。</td></tr>
-        <tr><td><span class="uichip">FPS (integer)</span></td><td>每秒幀數 = <strong>流暢度</strong>。30 普通、60 流暢(適合遊戲/動態)。</td></tr>
+        <tr><th>Setting</th><th>Meaning</th></tr>
+        <tr><td><span class="uichip">Base (canvas) resolution</span></td><td>The OBS composition canvas size.</td></tr>
+        <tr><td><span class="uichip">Output (scaled) resolution</span></td><td>The recorded/scaled frame size.</td></tr>
+        <tr><td><span class="uichip">FPS (integer)</span></td><td>The integer frame rate written into the active OBS video configuration.</td></tr>
       </table>
       <div class="callout warn">
-        <span class="ttl">解析度與 FPS 只能在「閒置時」改變</span>
-        <p>這是 OBS 影片管線的<strong>硬限制</strong>:錄製 / 串流 / 虛擬攝影機運行時無法更改解析度或 FPS。閒置時切到該 Scene 才會立即套用;之後按下錄製就會用該設定。</p>
-        <p>若你勾選了 <span class="uichip">restart recording to apply…</span>,且當時<strong>只有錄製</strong>在跑(沒有串流/虛擬攝影機),外掛會「停止錄製 → 套用新解析度 → 重新開始錄製」(會產生一個新檔案)。</p>
+        <span class="ttl">OBS cannot change video settings while outputs are active</span>
+        <p>Resolution and FPS changes require the OBS video pipeline to be idle. If recording, streaming, or virtual camera output is active, OBS rejects the change. The optional restart-recording setting can stop recording, apply video changes, and start a new recording when no stream or virtual camera output is active.</p>
       </div>
-      <p class="muted"><strong>清晰度 vs 流暢度 vs 品質:</strong>解析度決定畫面有多大/多細、FPS 決定多流暢、位元率(見下)決定壓縮後的品質,三者互相獨立。</p>
     </section>
 
     <section id="recording">
-      <h3>錄製:資料夾 / 格式 / 音軌 / 位元率</h3>
-      <p>這一組設定會寫進設定檔,<strong>套用到「下一次」開始錄製</strong>(不會中途改變正在進行的錄製)。</p>
+      <h3>Recording</h3>
+      <p>Recording settings are staged for the next recording. They do not rewrite an already-running recording output.</p>
       <table>
-        <tr><th>設定</th><th>說明</th></tr>
-        <tr><td><span class="uichip">Recording folder</span></td><td>該 Scene 的錄影存放資料夾(例如把遊戲與教學分到不同資料夾)。</td></tr>
-        <tr><td><span class="uichip">Format</span></td><td>容器格式。<code>mkv</code> 最抗當機;<code>mp4</code>/<code>hybrid_mp4</code> 相容性好、可直接剪輯。容器本身不影響畫質。</td></tr>
-        <tr><td><span class="uichip">Audio tracks</span></td><td>要錄哪幾條音軌(可複選)。例如軌 1 = 總混音、軌 2 = 麥克風、軌 3 = 遊戲聲,方便後期分開剪。</td></tr>
-        <tr><td><span class="uichip">Video bitrate (kbps)</span></td><td>每秒用多少資料編碼影像 = <strong>品質 / 檔案大小</strong>。參考:1080p30 ≈ 8000、1080p60 ≈ 12000、1440p60 ≈ 20000。</td></tr>
+        <tr><th>Setting</th><th>Meaning</th></tr>
+        <tr><td><span class="uichip">Recording folder</span></td><td>Folder for future recordings from this profile.</td></tr>
+        <tr><td><span class="uichip">Format</span></td><td>Container format such as <code>mkv</code>, <code>hybrid_mp4</code>, <code>mp4</code>, <code>mov</code>, <code>mpegts</code>, or <code>flv</code>.</td></tr>
+        <tr><td><span class="uichip">Audio tracks</span></td><td>Tracks 1 through 6, stored as an OBS recording-track bitmask.</td></tr>
+        <tr><td><span class="uichip">Video bitrate</span></td><td>Writes the recording encoder bitrate in kbps and switches the recording encoder to CBR. Advanced output mode only.</td></tr>
       </table>
-      <div class="callout warn">
-        <span class="ttl">位元率僅支援 Advanced 輸出模式</span>
-        <p>位元率寫入 <code>recordEncoder.json</code> 並把錄製編碼器設為 <strong>CBR</strong>,只在 OBS 的 <em>Advanced</em> 輸出模式有效。Simple 模式下此欄位會被忽略(並於 log 提示)。面板會顯示目前是 Simple 還是 Advanced 模式。</p>
-        <p>注意:套用位元率會把錄製編碼器切成 CBR;若你原本用 CQP/CRF,套用後會變成 CBR。</p>
-      </div>
     </section>
 
     <section id="actions">
-      <h3>Copy / Apply 按鈕</h3>
+      <h3>Actions</h3>
       <ul>
-        <li><span class="uichip">Copy from current OBS settings</span> — 用 OBS<strong>目前</strong>的值快速帶入起始值(解析度、FPS、錄製資料夾/格式/音軌、位元率、監聽裝置)。它<strong>只填值,不會自動勾選</strong>任何項目,讓你有個起點再微調。</li>
-        <li><span class="uichip">Apply now</span> — 立即儲存並套用。若你正在編輯的 Scene 就是<strong>目前直播中的 Scene</strong>,會馬上生效;否則會在你切到該 Scene 時才套用。</li>
+        <li><span class="uichip">Copy from current OBS settings</span> fills the form with current OBS values without automatically enabling any overrides.</li>
+        <li><span class="uichip">Apply now</span> saves and applies immediately when the edited scene is also the current program scene.</li>
       </ul>
-      <p>其實你每次改欄位都會<strong>自動儲存</strong>,<span class="uichip">Apply now</span> 主要是用來「立刻套用到現在這一刻」。</p>
     </section>
 
     <section id="audio-concept">
-      <h3>音訊監聽:先搞懂「監聽」vs「錄製」</h3>
-      <p>這是理解後面兩個功能的關鍵。OBS 裡,一個音源的聲音有<strong>兩條獨立的路</strong>:</p>
+      <h3>Monitoring Vs Recording</h3>
+      <p>OBS audio has two separate paths. The output path goes to recording and streaming. The monitoring path is playback for you to hear. Auto Resize Output only changes the monitoring path for monitoring features.</p>
 
       <figure>
-        <svg viewBox="0 0 720 280" role="img" aria-label="音訊兩條路徑示意圖">
+        <svg viewBox="0 0 720 280" role="img" aria-label="Audio path diagram">
           <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L8,3 L0,6 Z" fill="#9aa3b2"/>
-            </marker>
             <marker id="arrowg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L8,3 L0,6 Z" fill="#3fb98c"/>
             </marker>
@@ -295,124 +343,92 @@
               <path d="M0,0 L8,3 L0,6 Z" fill="#4f8cff"/>
             </marker>
           </defs>
-          <!-- source -->
-          <rect x="20" y="110" width="150" height="60" rx="10" fill="#1e222b" stroke="#2a2f3a"/>
-          <text x="95" y="138" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">音源</text>
-          <text x="95" y="158" fill="#9aa3b2" font-size="12" text-anchor="middle">麥克風 / 桌面音訊…</text>
-
-          <!-- output path -->
+          <rect x="20" y="110" width="150" height="60" rx="8" fill="#1e222b" stroke="#2a2f3a"/>
+          <text x="95" y="140" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">Source</text>
+          <text x="95" y="160" fill="#9aa3b2" font-size="12" text-anchor="middle">Mic / capture / app audio</text>
           <line x1="170" y1="135" x2="430" y2="80" stroke="#4f8cff" stroke-width="2.5" marker-end="url(#arrowb)"/>
-          <text x="300" y="92" fill="#4f8cff" font-size="12" font-weight="600" text-anchor="middle" transform="rotate(-12 300 92)">Output（輸出）</text>
-          <rect x="440" y="50" width="250" height="60" rx="10" fill="#13251d" stroke="#3fb98c"/>
-          <text x="565" y="78" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">🎬 錄製 / 串流</text>
-          <text x="565" y="97" fill="#3fb98c" font-size="11.5" text-anchor="middle">→ 寫進檔案(音量不受監聽影響)</text>
-
-          <!-- monitor path -->
+          <text x="300" y="92" fill="#4f8cff" font-size="12" font-weight="600" text-anchor="middle" transform="rotate(-12 300 92)">Output</text>
+          <rect x="440" y="50" width="250" height="60" rx="8" fill="#13251d" stroke="#3fb98c"/>
+          <text x="565" y="78" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">Recording / streaming</text>
+          <text x="565" y="97" fill="#3fb98c" font-size="11.5" text-anchor="middle">Captured content and volume</text>
           <line x1="170" y1="150" x2="430" y2="205" stroke="#3fb98c" stroke-width="2.5" marker-end="url(#arrowg)"/>
-          <text x="300" y="200" fill="#3fb98c" font-size="12" font-weight="600" text-anchor="middle" transform="rotate(12 300 200)">Monitor（監聽）</text>
-          <rect x="440" y="175" width="250" height="60" rx="10" fill="#1e222b" stroke="#2a2f3a"/>
-          <text x="565" y="203" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">🎧 你的耳朵</text>
-          <text x="565" y="222" fill="#9aa3b2" font-size="11.5" text-anchor="middle">這條路 = 本外掛能控制的部分</text>
+          <text x="300" y="200" fill="#3fb98c" font-size="12" font-weight="600" text-anchor="middle" transform="rotate(12 300 200)">Monitor</text>
+          <rect x="440" y="175" width="250" height="60" rx="8" fill="#1e222b" stroke="#2a2f3a"/>
+          <text x="565" y="203" fill="#e6e8ec" font-size="15" font-weight="700" text-anchor="middle">What you hear</text>
+          <text x="565" y="222" fill="#9aa3b2" font-size="11.5" text-anchor="middle">Controlled by monitoring features</text>
         </svg>
-        <figcaption>「監聽」只是放給你聽,和「錄製/串流」那條路完全分開 —— 所以動監聽永遠不會影響錄到的內容或音量。</figcaption>
+        <figcaption>Monitoring changes affect what you hear, not what OBS records or streams.</figcaption>
       </figure>
 
       <div class="callout danger">
-        <span class="ttl">最重要的前提:只有「經過 OBS 監聽」的聲音才控制得到</span>
-        <p>上圖的「監聽」這條路,<strong>預設是關的</strong>。要讓某個音源的聲音經過 OBS 監聽(這樣本外掛才管得到你聽不聽得到),你必須先在 OBS <strong>混音器</strong>把該音源設成 <span class="uichip">Monitor and Output</span>:</p>
-        <p>混音器右下角 <strong>⋮ → Advanced Audio Properties</strong> → 該音源的 <strong>Audio Monitoring</strong> 欄位選 <strong>Monitor and Output</strong>。</p>
-        <p>如果某個聲音是<strong>作業系統直接播放</strong>到你喇叭/耳機的(例如一般桌面音訊,OBS 只是側錄),那你聽到的是系統的聲音,OBS 的監聽開關管不到它。</p>
+        <span class="ttl">The sound must pass through OBS monitoring</span>
+        <p>Open OBS Advanced Audio Properties and set the source's Audio Monitoring to <strong>Monitor and Output</strong> or <strong>Monitor Only</strong>. If the operating system is playing the sound directly to your headphones, OBS monitoring controls cannot selectively mute it.</p>
       </div>
     </section>
 
     <section id="monitor-device">
-      <h3>每個 Scene 的監聽裝置</h3>
-      <p>在 <span class="uichip">Audio monitoring</span> 群組勾選 <span class="uichip">Monitoring device</span> 並選一個裝置。切到該 Scene 時,OBS 的<strong>全域監聽裝置</strong>就會換成它。</p>
-      <ul>
-        <li><strong>錄製中也能切,且不中斷錄製</strong> —— 監聽和錄製是兩條路。</li>
-        <li>不會改變錄到的內容或音量。</li>
-        <li>用途:讓某個 Scene 把監聽導到「你沒在聽的裝置」,等於那個 Scene 你聽不到,但照常錄。</li>
-      </ul>
-      <div class="callout note">
-        <p>若選的裝置目前不存在(例如拔掉的耳機),面板仍會保留它,設定不會遺失。某些平台不支援監聽時,此區塊會自動變灰。</p>
-      </div>
+      <h3>Per-Scene Monitoring Device</h3>
+      <p>Enable <span class="uichip">Monitoring device</span> and choose where OBS should play monitored audio when the scene becomes active. This can change while recording because it does not touch the encoder path.</p>
     </section>
 
     <section id="mute">
-      <h3>「Mute to me」一鍵靜音(全域)</h3>
-      <p>面板<strong>最上方</strong>那顆按鈕。一鍵讓<strong>你自己</strong>瞬間聽不到所有被監聽的音訊,再按一次恢復 —— <strong>錄製全程不受影響</strong>(內容、音量都不變),錄製中也能隨時切。不需要為此複製任何 Scene。Windows 版會靜音 OBS 這個 process 的播放 session(類似 EarTrumpet mute <code>obs64.exe</code>),不會動到錄製路徑。</p>
+      <h3>Mute To Me</h3>
+      <p>The top button globally stops you from hearing OBS-monitored audio. Press it again to hear monitoring again.</p>
       <ul>
-        <li>按一下 → <span class="uichip">Muted to you — click to hear again</span>:你聽不到了。</li>
-        <li>再按一下 → 恢復聽得到。</li>
-        <li>需要最小控制介面時,按 <span class="uichip">Compact dock mode</span>。Auto Resize Output 仍是 OBS 介面內的 dock,但只顯示 <span class="uichip">Mute</span> / <span class="uichip">Hear</span>;右鍵該按鈕選 <span class="uichip">Show full settings</span> 可回到完整設定。</li>
+        <li>Windows: mutes OBS playback sessions on the current monitoring endpoint and restores their previous mute state when disabled.</li>
+        <li>Other platforms: routes OBS monitoring to a silent sentinel device as a fallback.</li>
+        <li>Recording content, recorded volume, source volume, and track selection are not changed.</li>
       </ul>
-      <div class="callout tip">
-        <span class="ttl">典型用法</span>
-        <p>錄一段長影片時,中途你不想再聽那些聲音(吵、或想耳根清淨),按一下 Mute to me;觀眾/錄影檔<strong>完全不受影響</strong>。想聽了再按回來。</p>
-      </div>
       <details>
-        <summary>技術說明:為什麼不用「切換每個來源的監聽類型」?</summary>
-        <p>因為 OBS 會在<strong>每次存檔</strong>(自動存檔、切換 Scene Collection、關閉前存檔)把每個來源的監聽類型寫進 Scene Collection,而關閉時的存檔發生在外掛能還原之前。若用「切換監聽類型」來靜音,一旦在靜音狀態下存檔/關閉,你原本的 <code>Monitor and Output</code> 設定就會被永久覆寫。</p>
-        <p>Windows 版改用 OS audio session mute,也就是靜音 OBS 播給你的那個播放 session;解除時會還原原本的 session mute 狀態。非 Windows 平台才使用全域監聽裝置 fallback。</p>
+        <summary>Why not toggle each source's monitoring type?</summary>
+        <p>OBS persists each source's monitoring type when saving a scene collection. If a plugin changed monitoring types for mute, a save while muted could permanently overwrite a user's <code>Monitor and Output</code> setup. This plugin avoids that path.</p>
       </details>
     </section>
 
     <section id="limits">
-      <h3>重要限制(務必理解)</h3>
+      <h3>Limits</h3>
       <ul>
-        <li><strong>解析度 / FPS 無法在錄製/串流/虛擬攝影機運行時更改</strong> —— OBS 架構限制。任何宣稱「錄製中無縫切解析度」的方案都做不到。</li>
-        <li><strong>位元率僅 Advanced 輸出模式</strong>,且套用後錄製編碼器會變成 CBR。</li>
-        <li><strong>「聽不到但照錄」只對經由 OBS 監聽的聲音有效</strong>(音源需設為 Monitor and Output);系統直接播放的聲音 OBS 管不到。</li>
-        <li>錄製設定(資料夾/格式/音軌/位元率)套用到<strong>下一次</strong>錄製,不會改變進行中的錄製。</li>
-        <li>UI 目前為英文;多語系為日後里程碑。</li>
+        <li>Resolution and FPS changes require OBS outputs to be idle, unless the plugin restarts recording.</li>
+        <li>Recording bitrate override requires Advanced output mode.</li>
+        <li><span class="uichip">Mute to me</span> only controls audio heard through OBS monitoring.</li>
+        <li>Recording folder, format, tracks, and bitrate apply to the next recording, not the current output.</li>
       </ul>
     </section>
 
     <section id="workflows">
-      <h3>實用情境</h3>
-      <h4>情境 A:遊戲 Scene 用 1080p60,聊天 Scene 用 1080p30 省資源</h4>
-      <ol>
-        <li>在遊戲 Scene 勾選 Output resolution 1920×1080 + FPS 60。</li>
-        <li>在聊天 Scene 勾選 FPS 30。</li>
-        <li>錄製<strong>開始前</strong>切到想要的 Scene,設定就會套用。</li>
-      </ol>
-      <h4>情境 B:不同 Scene 存到不同資料夾、不同格式</h4>
-      <p>在各 Scene 分別勾選 Recording folder / Format,下一次錄製就會按該 Scene 的設定走。</p>
-      <h4>情境 C:長時間錄製,中途讓自己耳根清淨</h4>
-      <p>把要錄的音源設成 Monitor and Output → 隨時按 <span class="uichip">Mute to me</span> 切換你聽不聽得到,錄影不受影響。</p>
+      <h3>Example Workflows</h3>
+      <h4>Game scenes at 1080p60, talk scenes at 1080p30</h4>
+      <p>Enable output resolution and FPS overrides on each scene. Switch to the scene before starting recording, or allow the plugin to restart recording if that workflow is acceptable.</p>
+      <h4>Different folders or formats per scene</h4>
+      <p>Enable recording folder and format overrides for each scene. The next recording uses the active scene's staged values.</p>
+      <h4>Long recordings where you stop listening mid-session</h4>
+      <p>Set sources to <span class="uichip">Monitor and Output</span>, then use <span class="uichip">Mute to me</span>. The recording continues unchanged.</p>
     </section>
 
     <section id="faq">
-      <h3>疑難排解 / FAQ</h3>
+      <h3>FAQ</h3>
       <details>
-        <summary>我按了 Mute to me,但還是聽得到聲音?</summary>
-        <p>若按鈕沒有維持在 muted 狀態、底部顯示找不到 active OBS playback session,請先讓 OBS monitoring 實際出聲,再按一次 Mute to me。</p>
-        <p>若按鈕已經顯示 muted 但你仍聽得到,那個聲音多半是<strong>系統直接播放</strong>的(不是經由 OBS 監聽)。請到混音器 → Advanced Audio Properties,把該音源的 Audio Monitoring 設成 <strong>Monitor and Output</strong>,Mute to me 才管得到。</p>
+        <summary>I clicked Mute to me but still hear sound.</summary>
+        <p>First make sure OBS monitoring is actually producing sound. Then verify the sound is not being played directly by the operating system. The source must use OBS monitoring for the plugin to control what you hear.</p>
       </details>
       <details>
-        <summary>切換 Scene 時解析度沒變?</summary>
-        <p>你大概正在<strong>錄製或串流</strong>。解析度/FPS 只能在閒置時改。要在錄製中換,需勾選該 Scene 的「restart recording to apply」(會產生新檔案,且只在沒有串流/虛擬攝影機時可行)。</p>
+        <summary>Resolution did not change when I switched scenes.</summary>
+        <p>An OBS output is probably active. OBS does not allow video pipeline changes while recording, streaming, or virtual camera output is running.</p>
       </details>
       <details>
-        <summary>位元率欄位沒作用?</summary>
-        <p>確認 OBS 在 <strong>Advanced</strong> 輸出模式(面板上會顯示目前模式)。Simple 模式不支援單獨設定錄製位元率。</p>
+        <summary>How do I leave compact dock mode?</summary>
+        <p>Right-click the compact <span class="uichip">Mute</span> / <span class="uichip">Hear</span> button and choose <span class="uichip">Show full settings</span>.</p>
       </details>
       <details>
-        <summary>找不到面板?</summary>
-        <p>上方選單 <span class="uichip">Docks</span> → 勾選 <span class="uichip">Auto Resize Output</span>。若整個外掛沒載入,確認 DLL 放在正確路徑、且安裝時 OBS 是關閉的。</p>
-      </details>
-      <details>
-        <summary>設定會跟著 Scene 複製嗎?</summary>
-        <p>會。設定存在 Scene 的 private_settings,複製 Scene 時一起複製,存檔時隨 Scene Collection 一起存。</p>
+        <summary>Do presets follow duplicated scenes?</summary>
+        <p>Yes. Presets live in source private settings, which OBS copies during scene duplication and serializes with the scene collection.</p>
       </details>
     </section>
-
   </main>
 </div>
 
 <footer>
-  Auto Resize Output · GPL-2.0-or-later · <a href="https://github.com/snowyukitty/obs-auto-resize-output" target="_blank" rel="noopener">github.com/snowyukitty/obs-auto-resize-output</a>
+  Auto Resize Output - GPL-2.0-or-later - <a href="https://github.com/snowyukitty/obs-auto-resize-output" target="_blank" rel="noopener">github.com/snowyukitty/obs-auto-resize-output</a>
 </footer>
-
 </body>
 </html>

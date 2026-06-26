@@ -1,118 +1,112 @@
-# obs-auto-resize-output
+# Auto Resize Output
 
-為 OBS Studio 提供 **每個 Scene 各自的錄製 / 輸出設定**。切換 scene 時自動套用該 scene 的設定;複製 scene 時設定也會一起被複製。
+OBS Studio plugin for **per-scene output, recording, and monitoring presets**.
 
-## 功能
+Auto Resize Output lets each scene carry its own output/recording preferences. When you switch scenes, the plugin applies that scene's enabled overrides and stores the preset directly in the scene source's `private_settings`, so duplicated scenes keep their preset automatically.
 
-每個 scene 可獨立覆寫以下設定:
+## Features
 
-| 設定 | 套用時機 | 備註 |
+| Setting | When it applies | Notes |
 |---|---|---|
-| 基底 (canvas) 解析度 | 切換到該 scene 時(限閒置) | 透過 `obs_reset_video()` |
-| 輸出 (scaled) 解析度 | 切換到該 scene 時(限閒置) | 同上 |
-| FPS(整數) | 切換到該 scene 時(限閒置) | 同上 |
-| 錄製資料夾 | 下一次開始錄製時 | 寫入 profile config |
-| 錄製格式 (mkv/mp4/mov/ts/flv…) | 下一次開始錄製時 | 寫入 profile config |
-| 音軌(bitmask) | 下一次開始錄製時 | 寫入 profile config |
-| 錄製 bitrate(kbps) | 下一次開始錄製時 | **僅 Advanced 輸出模式**;寫入 `recordEncoder.json`,設為 CBR |
-| 音訊監聽裝置(你聽的裝置) | 切換到該 scene 時(**錄製中也可,不中斷**) | 切換 OBS 全域監聽裝置;見下方〈音訊監聽〉 |
+| Base/canvas resolution | On scene switch, only while OBS outputs are idle | Uses `obs_reset_video()` |
+| Output/scaled resolution | On scene switch, only while OBS outputs are idle | Same pipeline limitation |
+| Integer FPS | On scene switch, only while OBS outputs are idle | Same pipeline limitation |
+| Recording folder | Next recording | Writes the active OBS profile config |
+| Recording format | Next recording | `mkv`, `hybrid_mp4`, `mp4`, `mov`, `fragmented_mp4`, `fragmented_mov`, `mpegts`, `flv` |
+| Recording audio tracks | Next recording | Six-track bitmask |
+| Recording video bitrate | Next recording | Advanced output mode only; writes `recordEncoder.json` as CBR |
+| Audio monitoring device | Immediately, even while recording | Changes the OBS monitoring playback device only |
 
-此外還有一個**全域**控制:
+Global controls:
 
-- **「Mute to me」一鍵開關**(dock 最上方):一鍵讓**你自己**聽不到被監聽的音訊,但**錄製完全不受影響**(內容、音量都不變),錄製中也能隨時切。詳見〈音訊監聽〉。
-- **Compact dock mode**:在 dock 頂部按 **Compact dock mode** 後,Auto Resize Output 仍是 OBS 介面內可拖曳/停靠的 dock,但只顯示 `Mute` / `Hear` 控制。右鍵點 mute button 可恢復完整設定。
+- **Mute to me**: one click stops *you* from hearing OBS-monitored audio while recording/streaming keeps capturing it at full volume.
+- **Compact dock mode**: collapses the OBS dock to a single `Mute` / `Hear` button. Right-click the button and choose `Show full settings` to return to the full panel.
 
-> **設定是「進入該 scene 時套用」,不會自動還原。** 若 scene B 沒有覆寫某個欄位,該欄位會維持目前的值(也就是上一個 scene 設過的值),而不是回到 profile 預設。要讓某 scene 用特定值,就在該 scene 明確勾選並設定它。
+## Important OBS Limitation
 
-切換 scene 時,外掛會讀取該 scene 的設定並套用;設定資料存在該 scene source 的 `private_settings` 裡,因此:
+OBS cannot change base resolution, output resolution, or FPS while recording, streaming, or virtual camera output is active. That is a libobs video pipeline limitation, not a plugin limitation.
 
-- **複製 scene** → 設定自動跟著複製(libobs 在 `obs_scene_duplicate` 時會 `obs_data_apply` 複製 private_settings)。
-- **存檔** → 設定隨 scene collection 的 `.json` 一起序列化,不需額外檔案。
+Behavior:
 
-## ⚠️ 一個 OBS 的硬限制(務必理解)
+- If OBS is idle, scene video overrides apply immediately.
+- If an output is active, recording folder/format/tracks/bitrate are staged for the next recording, but video changes are blocked.
+- If `restart recording to apply video changes` is enabled and only recording is active, the plugin can stop recording, apply the video change, and start a new recording. This creates a new file.
 
-**解析度與 FPS 無法在錄製 / 串流 / 虛擬攝影機運行時更改。** 這是 libobs 影片管線的根本限制:`obs_reset_video()` 只有在沒有任何 output 運行時才會成功,否則回傳 `OBS_VIDEO_CURRENTLY_ACTIVE`。
+## Audio Monitoring And "Mute To Me"
 
-因此本外掛的行為是:
+OBS audio monitoring is the playback path that lets *you* hear sources. It is separate from the recording/streaming encoder path.
 
-- **閒置時**切到某 scene → 立刻套用解析度/FPS。接著你按下錄製,就會用該 scene 的設定錄製。
-- **錄製中**切到某 scene:
-  - 錄製資料夾 / 格式 / 音軌仍會寫入,套用到**下一次**錄製。
-  - 解析度 / FPS **預設不會**即時改變(會在 dock 顯示提示)。
-  - 若你在該 scene 勾選了「restart recording to apply」,且當時**只有錄製**在跑(沒有串流/虛擬攝影機),外掛會**停止錄製 → 套用新解析度 → 重新開始錄製**(會產生一個新檔案)。
+`Mute to me` only affects monitored audio:
 
-> 任何宣稱能「錄製中無縫切換解析度」的方案都做不到這點 —— 這是 OBS 架構決定的,不是本外掛的缺陷。
+- On Windows, it mutes OBS playback sessions on the current monitoring endpoint, similar to the audio-session layer used by EarTrumpet. It does not change source volume, track selection, monitoring type, or the recorded audio path.
+- On other platforms, it falls back to routing OBS's global monitoring device to a silent sentinel device.
 
-## 音訊監聽(讓你自己聽不到,但照常錄製)
+For this to work, the sound must be heard through OBS monitoring. In OBS, open **Advanced Audio Properties** and set the source's **Audio Monitoring** to `Monitor and Output` or `Monitor Only`.
 
-OBS 的「監聽(monitoring)」是**播放給你聽**的路徑,和錄製/串流用的編碼器路徑**完全獨立**。因此調整監聽**不會中斷錄製、也不會改變錄到的內容或音量**。本外掛用這個特性提供兩個東西:
+If a sound is being played directly by the operating system to your headphones or speakers, OBS monitoring controls cannot silence it without also affecting what the system loopback capture receives.
 
-1. **每個 scene 的監聽裝置**:切到某 scene 時,自動把 OBS 的全域監聽裝置切到該 scene 指定的裝置。錄製中切換也安全、即時。
-2. **「Mute to me」一鍵開關**(全域):一鍵讓你**瞬間聽不到**所有被監聽的音訊;再按一次還原。Windows 版會靜音 OBS 這個 process 的播放 session(類似 EarTrumpet mute `obs64.exe`),錄製全程不受影響。
+## Usage
 
-**前提(務必理解)**:這只對「**經由 OBS 監聽**才聽得到」的音訊有效 —— 也就是在 OBS 混音器裡把該音源設為 **"Monitor and Output"** 的來源。如果某個聲音是**作業系統直接播放**到你喇叭/耳機的(例如一般桌面音訊,OBS 只是 loopback 擷取),那你是在聽系統的聲音,OBS 的監聽開關管不到它;此時要靜音只能靜音裝置,但那會連 loopback 擷取也一起靜音,錄製就跟著沒聲音了。
+1. Open OBS and enable **Docks -> Auto Resize Output**.
+2. Choose the scene to edit. The dock follows the current program scene until you manually select another scene.
+3. Enable **per-scene overrides** for that scene.
+4. Check only the settings that scene should override.
+5. Optionally click **Copy from current OBS settings** to use the current profile values as a starting point.
+6. Click **Apply now** to apply immediately when the edited scene is the current program scene, or just switch scenes and let the plugin apply automatically.
+7. Use **Mute to me** whenever you want to stop hearing monitored audio without affecting recording.
+8. Use **Compact dock mode** when you only want the mute control visible inside the OBS dock layout. Right-click the compact button and choose **Show full settings** to expand it again.
 
-**為什麼不用「切換每個來源的監聽類型」**:`obs_save_source()` 會在**每次存檔**(自動存檔、切換 scene collection、關閉 OBS 前的存檔)把每個來源的 `monitoring_type` 寫進 scene collection。關閉時的存檔發生在外掛能還原之前,沒有任何 hook 趕得及。所以若用「切換監聽類型」來靜音,一旦在靜音狀態存檔/關閉,使用者原本的 "Monitor and Output" 設定就會被永久覆寫。Windows 版改用 OS audio session mute,只靜音 OBS 播給你的聲音;非 Windows 平台才使用全域監聽裝置 fallback。
+## Installation
 
-## 已知限制 / 尚未支援
+Windows plugin layout:
 
-- **錄製 bitrate 僅支援 Advanced 輸出模式**:Advanced 模式下寫入 `recordEncoder.json`(rate_control=CBR + bitrate),OBS 在開始錄製時讀取,故套用到下一次錄製。Simple 模式的錄製位元率與「錄製品質」模式綁定、且與串流共用編碼器,無法乾淨地單獨設定,因此在 Simple 模式下此欄位會被忽略(並於 log 提示)。
-- 設為 bitrate 會把錄製編碼器切成 **CBR**(這是 bitrate 生效的前提);若你原本用 CQP/CRF,套用後會變成 CBR。
-- 錄製設定的 config key(`RecFormat2`、`RecTracks`、`FilePath`/`RecFilePath`)以 **OBS 30/31+** 為目標。若你的 OBS 較舊,key 名稱可能不同(見 `src/ApplyPreset.cpp` 集中管理處)。
-
-## 設計重點
-
-- **資料存放**:每個 scene 的設定以一個巢狀 `obs_data` 物件(key `auto_resize_output`)存進該 scene source 的 `private_settings`。這是「複製即帶走、存檔即持久化」能成立的關鍵。
-- **僅依賴穩定公開 API**:`obs.h`(`obs_reset_video` / `obs_get_video_info` / private_settings / obs_data)、`obs-frontend-api.h`(dock、事件、profile config)。不碰 OBS UI 的私有結構,降低版本升級破壞風險。
-- **事件驅動**:監聽 `OBS_FRONTEND_EVENT_SCENE_CHANGED`(套用)、`FINISHED_LOADING`(啟動套用)、`RECORDING_STOPPED`(完成重啟錄製流程)、`SCENE_LIST_CHANGED` / `SCENE_COLLECTION_CHANGED`(刷新 dock 清單)。
-
-程式碼結構:
-
-```
-src/
-├── plugin-main.cpp   模組進入點、frontend 事件、dock 註冊
-├── ScenePreset.*     從/向 scene private_settings 讀寫設定
-├── ApplyPreset.*     套用設定:obs_reset_video + profile config + 監聽裝置 / Mute to me + 重啟錄製狀態機
-└── PresetDock.*      Qt dock UI
-```
-
-## 建置
-
-需要 OBS 開發環境(會匯出 `libobs` 與 `obs-frontend-api` 的 CMake package)以及對應的 Qt6。
-
-```bash
-cmake -B build -DCMAKE_PREFIX_PATH="<path-to-obs-dev>;<path-to-Qt6>"
-cmake --build build --config RelWithDebInfo
-```
-
-取得 OBS 開發檔案最簡單的方式,是直接套用官方 [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate) 的依賴下載流程(`buildspec.json` + `.github/scripts`),再把本專案的 `src/`、`data/`、`CMakeLists.txt` 放進去;它會自動抓取對應 OBS 版本的 `libobs`/`obs-frontend-api` 與 Qt,並產生跨平台 CI。
-
-### 本機安裝(Windows 快速測試)
-
-把建置出的 `obs-auto-resize-output.dll` 與 `data/` 放到:
-
-```
+```text
 %ProgramData%\obs-studio\plugins\obs-auto-resize-output\bin\64bit\obs-auto-resize-output.dll
 %ProgramData%\obs-studio\plugins\obs-auto-resize-output\data\locale\en-US.ini
 ```
 
-啟動 OBS 後,從 **Docks** 選單開啟「Auto Resize Output」。
+Close OBS before replacing the DLL.
 
-## 使用
+## Build
 
-1. 在 dock 選擇要設定的 scene(預設跟隨目前的 program scene;一旦你手動選了別的 scene,切換直播 scene 時就不會再搶走你的選擇,直到你選回直播中的 scene)。
-2. 勾選「Enable per-scene overrides for this scene」。
-3. 勾選你想覆寫的項目並填值。可按「Copy from current OBS settings」用目前 OBS 設定快速帶入起始值(含錄製 bitrate 與監聽裝置)。
-4. 切換到該 scene 時會自動套用(閒置時連解析度都會即時改;監聽裝置即使錄製中也會即時切)。
-5. 想讓自己暫時聽不到(但繼續錄製)時,按 dock 最上方的 **「Mute to me」**;再按一次恢復。
-6. 若想用最小控制介面,按 **「Compact dock mode」**;Auto Resize Output 會保留為 OBS dock,但只顯示 `Mute` / `Hear` 按鈕。右鍵點該按鈕選 **Show full settings** 可回到完整面板。
+This repository uses the OBS plugin-template build system. The pinned dependencies are in `buildspec.json` and currently target OBS Studio 31.1.1 with the matching OBS dependencies and Qt6 package.
 
-## 版本升級耐受性
+Cloud build:
 
-- 僅用穩定公開 API,原始碼層級相容性佳;OBS 大版本更新通常只需重新編譯。
-- 設定存在 source private_settings(OBS 原生序列化路徑),不自訂檔案格式。
-- 若未來 OBS 改了錄製 config key 名稱,集中在 `ApplyPreset.cpp` 一處調整即可。
+```powershell
+gh workflow run dispatch.yaml --ref main -f job=build
+```
+
+Local Windows build with the template presets:
+
+```powershell
+cmake --preset windows-x64
+cmake --build --preset windows-x64 --config RelWithDebInfo
+```
+
+See [BUILD.md](BUILD.md) for the full build guide.
+
+## Design Notes
+
+- Presets are stored under the scene source's `private_settings` key `auto_resize_output`.
+- Only public OBS APIs are used: `obs.h`, `obs-frontend-api.h`, profile `config_t`, and `obs_data`.
+- Scene duplication carries presets because libobs copies source private settings during duplication.
+- The plugin deliberately does not toggle per-source monitoring type for mute. OBS persists `monitoring_type` during saves, so muting by changing source monitoring modes could permanently overwrite a user's mixer setup.
+
+## Current Scope
+
+Supported:
+
+- OBS Studio 30/31-era recording config keys, with CI pinned to OBS 31.1.1.
+- Windows, macOS, and Ubuntu builds through GitHub Actions.
+- Advanced output mode for recording bitrate overrides.
+
+Known limits:
+
+- Simple output mode does not expose a clean independent recording bitrate override.
+- Video changes cannot be applied while OBS outputs are active unless the plugin restarts recording.
+- `Mute to me` only affects audio heard through OBS monitoring.
 
 ## License
 
-GPL-2.0-or-later(因連結 libobs)。見 [LICENSE](LICENSE)。
+GPL-2.0-or-later. See [LICENSE](LICENSE).

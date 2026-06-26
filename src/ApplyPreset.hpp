@@ -42,14 +42,14 @@ void aro_apply_preset_for_scene(obs_source_t *scene);
 void aro_on_recording_stopped();
 
 // "Mute to me": a global, instant toggle that silences what YOU hear without
-// touching the recording. On Windows this mutes OBS' own playback sessions (the
-// same layer EarTrumpet controls). On other platforms it falls back to routing
-// OBS's global monitoring device to a silent sentinel. Independent of any
-// scene/preset and safe to toggle mid-recording -- the output/encoder path is
-// untouched, so recorded content and volume are unchanged. We do not toggle
-// per-source monitoring type: monitoring_type is persisted into the scene
-// collection on every save, so muting via type could permanently lose the
-// user's setup.
+// touching the recording. On Windows this mutes OBS' playback sessions on the
+// current monitoring endpoint (the same OS audio-session layer EarTrumpet
+// controls). On other platforms it falls back to routing OBS's global
+// monitoring device to a silent sentinel. Independent of any scene/preset and
+// safe to toggle mid-recording -- the output/encoder path is untouched, so
+// recorded content and volume are unchanged. We do not toggle per-source
+// monitoring type: monitoring_type is persisted into the scene collection on
+// every save, so muting via type could permanently lose the user's setup.
 void aro_set_mute_to_me(bool mute);
 bool aro_mute_to_me_active();
 

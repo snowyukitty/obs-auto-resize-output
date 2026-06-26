@@ -1,107 +1,74 @@
-# 建置指南(含「如何取得 OBS 原始碼 / Qt6」)
+# Build Guide
 
-## 先澄清:沒有「申請」這回事
+This project is based on the OBS plugin-template build system. In normal use you do **not** need to build OBS Studio or install Qt manually. The template workflow downloads the pinned OBS sources, OBS dependencies, and Qt6 package described in `buildspec.json`.
 
-OBS 原始碼與 Qt6 都是**免費、開源、可直接下載**的,不需要任何申請或授權。
-而且——**建置 OBS 外掛時,你通常根本不需要自己安裝 Qt6 或編譯 OBS**。
-官方的 [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate) 內建一個 `buildspec.json`,會在編譯時**自動下載對應版本的 OBS 開發檔案 + Qt6 + 相依套件**(目前釘選 OBS 31.1.1 + Qt6,2025-07-11 版)。
+## Recommended Path: GitHub Actions
 
-所以下面給你三條路,**從最省事到最完整**。推薦先試 **路線 A**。
+This is the simplest way to produce a Windows DLL and release artifacts.
 
----
+1. Push the repository to GitHub.
+2. Open the **Actions** tab.
+3. Run the **Dispatch** workflow with `job=build`, or push to a branch covered by the regular workflows.
+4. Download the Windows artifact from the completed run.
+5. Install the unpacked plugin folder into OBS.
 
-## 路線 A:GitHub 雲端建置(零本機安裝,最推薦先試)
+CLI equivalent:
 
-完全不用在自己電腦裝 Visual Studio / Qt / OBS。GitHub 的免費 CI 會幫你編出 Windows DLL。
-
-1. 註冊一個免費 [GitHub](https://github.com) 帳號。
-2. 在本機安裝 [Git](https://git-scm.com/download/win)(只需要這個)。
-3. **先**初始化 git(讓下一步能修正 CI 腳本的執行權限/symlink):
-   ```powershell
-   git init -b main
-   ```
-4. 把模板建置系統拉進來(會自動下載 OBS/Qt 的設定,真正下載發生在 CI 上):
-   ```powershell
-   pwsh ./scripts/Integrate-Template.ps1
-   ```
-   這會複製模板的 `cmake/`、`.github/`(CI 設定)、`build-aux/`、`CMakePresets.json`、`buildspec.json` 等,自動改好外掛名稱/原始碼清單,並修正在 Windows 複製時會掉失的執行權限與 symlink(否則 Linux/macOS 建置與格式檢查會 exit 126)。
-5. 建立 GitHub repo 並推上去(`gh` CLI 一行搞定,或在網站手動開 repo 再 `git remote add`):
-   ```powershell
-   git add -A
-   git commit -m "Initial commit: obs-auto-resize-output"
-   gh repo create obs-auto-resize-output --public --source=. --remote=origin --push
-   ```
-6. 打開 GitHub repo 的 **Actions** 分頁 → 等綠色勾完成 → 進入該次 run → 在 **Artifacts** 下載 Windows 的 zip,裡面就是編好的 `obs-auto-resize-output.dll`(+ `data/`)。
-7. 跳到本文件最後的「**安裝到 OBS**」。
-
-> 之後每次改程式碼 `git push`,CI 會自動重編,你只要下載新 artifact。
-
----
-
-## 路線 B:本機建置(模板自動下載 OBS/Qt)
-
-想在自己電腦編、方便除錯時用這條。**仍然不需要手動裝 Qt6 或編 OBS**——模板會自動抓。
-
-### 取得工具(一次性)
-
-| 工具 | 下載 | 備註 |
-|---|---|---|
-| Git | https://git-scm.com/download/win | |
-| Visual Studio 2022(Community 免費) | https://visualstudio.microsoft.com/ | 安裝時勾選 **「使用 C++ 的桌面開發」** workload |
-| CMake ≥ 3.30 | https://cmake.org/download/ | VS2022 通常已內建;否則裝獨立版並加入 PATH |
-
-> OBS 原始碼/開發檔案與 Qt6 **不必另外裝**——下一步的 `buildspec.json` 會自動下載到 build 目錄。
-
-### 步驟
-
-1. 拉入模板建置系統:
-   ```powershell
-   pwsh ./scripts/Integrate-Template.ps1
-   ```
-2. 設定 + 建置(第一次會自動下載 OBS 31.1.1 + Qt6,需幾分鐘):
-   ```powershell
-   cmake --preset windows-x64
-   cmake --build --preset windows-x64 --config RelWithDebInfo
-   ```
-3. 產物在 `build_x64/RelWithDebInfo/`(或 `release/`)下,檔名 `obs-auto-resize-output.dll`。
-4. 跳到「安裝到 OBS」。
-
----
-
-## 路線 C:本機建置(自備相依,使用我們的 standalone CMake)
-
-只有在你**已經有** OBS 開發檔案與 Qt6(例如你已從原始碼編過 OBS)時才需要。
-
-1. 取得 OBS 開發檔案的兩種方式(任選):
-   - **從原始碼編 OBS**:`git clone --recursive https://github.com/obsproject/obs-studio.git`,依其 README 編譯;它會用自己的 buildspec 下載 Qt6 + deps。編好後其 build 樹會匯出 `libobs` / `obs-frontend-api` 的 CMake package。
-   - **用預編好的 obs-deps**:從 [obs-deps releases](https://github.com/obsproject/obs-deps/releases) 下載含 Qt6 的 bundle(但 `libobs` 開發檔仍需來自 OBS build 樹)。
-2. 用我們保留的 standalone CMake(`CMakeLists.standalone.cmake`)建置,並把 `CMAKE_PREFIX_PATH` 指到上面那些套件:
-   ```powershell
-   cmake -B build -S . -C CMakeLists.standalone.cmake `
-     -DCMAKE_PREFIX_PATH="C:/path/to/obs-build;C:/path/to/Qt6"
-   # 或把 CMakeLists.standalone.cmake 覆蓋回 CMakeLists.txt 再 configure
-   cmake --build build --config RelWithDebInfo
-   ```
-
-> 路線 C 步驟最多、最容易卡在找不到套件;除非你已經是 OBS 開發環境,否則建議用 A 或 B。
-
----
-
-## 安裝到 OBS(三條路線通用)
-
-把 DLL 與 `data/` 放到 OBS 的外掛目錄:
-
+```powershell
+gh workflow run dispatch.yaml --ref main -f job=build
+gh run list --workflow dispatch.yaml --limit 5
+gh run download <run-id> -D artifacts\<run-id>
 ```
+
+## Local Windows Build
+
+Install:
+
+- Git
+- Visual Studio 2022 Community with the **Desktop development with C++** workload
+- CMake 3.28 or newer
+
+Then run:
+
+```powershell
+cmake --preset windows-x64
+cmake --build --preset windows-x64 --config RelWithDebInfo
+```
+
+The first configure/build downloads the pinned OBS/Qt dependencies and may take a few minutes.
+
+## Local macOS / Linux Build
+
+Use the platform presets provided by the template. The exact package requirements are inherited from the OBS plugin-template workflow and the pinned dependency versions in `buildspec.json`.
+
+```bash
+cmake --preset macos
+cmake --build --preset macos --config RelWithDebInfo
+```
+
+```bash
+cmake --preset ubuntu-24.04
+cmake --build --preset ubuntu-24.04 --config RelWithDebInfo
+```
+
+## Manual OBS/Qt Build
+
+Only use this route if you already maintain an OBS development environment. Point `CMAKE_PREFIX_PATH` at an OBS build/install tree that exports `libobs` and `obs-frontend-api`, plus the matching Qt6 package.
+
+```powershell
+cmake -B build -DCMAKE_PREFIX_PATH="C:/path/to/obs-build;C:/path/to/Qt6"
+cmake --build build --config RelWithDebInfo
+```
+
+## Install Into OBS
+
+Close OBS before replacing the DLL.
+
+Windows layout:
+
+```text
 %ProgramData%\obs-studio\plugins\obs-auto-resize-output\bin\64bit\obs-auto-resize-output.dll
 %ProgramData%\obs-studio\plugins\obs-auto-resize-output\data\locale\en-US.ini
 ```
 
-(`%ProgramData%` 通常是 `C:\ProgramData`。)
-
-啟動 OBS → 上方選單 **Docks** → 勾選「**Auto Resize Output**」即可看到面板。
-
----
-
-## 我的建議
-
-先走 **路線 A**:十分鐘內就能拿到一顆能裝進 OBS 的 DLL,完全不必在本機裝任何重量級工具,也能立刻驗證外掛是否正確編譯與載入。等確認可用、想開始本機改程式碼除錯時,再加裝路線 B 的 VS2022 即可。
+After installing, start OBS and enable **Docks -> Auto Resize Output**.
