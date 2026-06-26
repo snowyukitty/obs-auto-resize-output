@@ -8,24 +8,52 @@
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPushButton>
+#include <QScreen>
+#include <QShowEvent>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+#endif
+
+#include <algorithm>
 #include <cstring>
+#include <functional>
 #include <initializer_list>
+#include <utility>
 
 namespace {
+
+constexpr const char *kUiConfigSection = "AutoResizeOutput";
+constexpr const char *kCompactOverlayVisibleKey = "CompactMuteOverlayVisible";
+constexpr const char *kCompactOverlayXKey = "CompactMuteOverlayX";
+constexpr const char *kCompactOverlayYKey = "CompactMuteOverlayY";
 
 // (RecFormat2 identifier, human label). Identifiers must match what OBS writes
 // for the recording container; labels are what the user sees.
@@ -62,13 +90,195 @@ bool addMonitorDevice(void *data, const char *name, const char *id)
 	return true;
 }
 
+QPoint clampToVisibleScreen(const QPoint &pos, const QSize &size)
+{
+	QScreen *screen = QGuiApplication::screenAt(pos);
+	if (!screen)
+		screen = QGuiApplication::primaryScreen();
+	if (!screen)
+		return pos;
+
+	const QRect bounds = screen->availableGeometry();
+	const int x = std::min(std::max(pos.x(), bounds.left()), bounds.right() - size.width() + 1);
+	const int y = std::min(std::max(pos.y(), bounds.top()), bounds.bottom() - size.height() + 1);
+	return QPoint(x, y);
+}
+
 } // namespace
+
+class CompactMuteOverlay : public QWidget {
+public:
+	explicit CompactMuteOverlay(QWidget *parent = nullptr)
+		: QWidget(parent, Qt::Tool | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint |
+				    Qt::WindowDoesNotAcceptFocus)
+	{
+		setObjectName("compactMuteOverlay");
+		setWindowTitle(QObject::tr("Auto Resize Output - Mute"));
+		setAttribute(Qt::WA_ShowWithoutActivating);
+
+		auto *root = new QHBoxLayout(this);
+		root->setContentsMargins(6, 6, 6, 6);
+		root->setSpacing(0);
+
+		m_button = new QPushButton(this);
+		m_button->setCheckable(true);
+		m_button->setMinimumSize(112, 40);
+		m_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+		m_button->installEventFilter(this);
+		root->addWidget(m_button);
+
+		setFixedSize(sizeHint());
+		setStyleSheet(
+			"#compactMuteOverlay {"
+			" background: #1f232b;"
+			" border: 1px solid #596170;"
+			" border-radius: 8px;"
+			"}"
+			"#compactMuteOverlay QPushButton {"
+			" background: #2f6bdc;"
+			" color: white;"
+			" border: 1px solid #6f9cff;"
+			" border-radius: 6px;"
+			" font-weight: 700;"
+			" padding: 0 14px;"
+			"}"
+			"#compactMuteOverlay QPushButton:checked {"
+			" background: #a33d3d;"
+			" border-color: #d96b6b;"
+			"}"
+			"#compactMuteOverlay QPushButton:disabled {"
+			" background: #4a4f58;"
+			" color: #b8bec8;"
+			" border-color: #6a707a;"
+			"}");
+
+		connect(m_button, &QPushButton::clicked, this, [this](bool checked) {
+			if (m_muteChanged)
+				m_muteChanged(checked);
+		});
+
+		setMuteActive(false);
+	}
+
+	void setMuteChangedCallback(std::function<void(bool)> callback) { m_muteChanged = std::move(callback); }
+	void setClosedCallback(std::function<void()> callback) { m_closed = std::move(callback); }
+	void setMovedCallback(std::function<void()> callback) { m_moved = std::move(callback); }
+
+	void setMuteEnabled(bool enabled) { m_button->setEnabled(enabled); }
+
+	void setMuteActive(bool active)
+	{
+		const QSignalBlocker block(m_button);
+		m_button->setChecked(active);
+		m_button->setText(active ? QObject::tr("Hear") : QObject::tr("Mute"));
+		m_button->setToolTip(
+			active ? QObject::tr("Muted to you. Click to hear monitored audio again. Drag to move.")
+			       : QObject::tr("Click to stop hearing monitored audio. Recording is unchanged. Drag to move."));
+	}
+
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (watched != m_button)
+			return QWidget::eventFilter(watched, event);
+
+		switch (event->type()) {
+		case QEvent::MouseButtonPress:
+		case QEvent::MouseMove:
+		case QEvent::MouseButtonRelease:
+			return handleMouseEvent(static_cast<QMouseEvent *>(event), true);
+		default:
+			return QWidget::eventFilter(watched, event);
+		}
+	}
+
+	void mousePressEvent(QMouseEvent *event) override
+	{
+		handleMouseEvent(event, false);
+	}
+
+	void mouseMoveEvent(QMouseEvent *event) override
+	{
+		handleMouseEvent(event, false);
+	}
+
+	void mouseReleaseEvent(QMouseEvent *event) override
+	{
+		handleMouseEvent(event, false);
+	}
+
+	void closeEvent(QCloseEvent *event) override
+	{
+		event->ignore();
+		hide();
+		if (m_closed)
+			m_closed();
+	}
+
+	void showEvent(QShowEvent *event) override
+	{
+		QWidget::showEvent(event);
+#ifdef _WIN32
+		SetWindowDisplayAffinity(reinterpret_cast<HWND>(winId()), WDA_EXCLUDEFROMCAPTURE);
+#endif
+	}
+
+private:
+	bool handleMouseEvent(QMouseEvent *event, bool fromButton)
+	{
+		if (event->button() == Qt::LeftButton && event->type() == QEvent::MouseButtonPress) {
+			m_dragPressed = true;
+			m_dragging = false;
+			m_pressGlobal = event->globalPosition().toPoint();
+			m_startTopLeft = frameGeometry().topLeft();
+			return false;
+		}
+
+		if (event->type() == QEvent::MouseMove && m_dragPressed) {
+			const QPoint delta = event->globalPosition().toPoint() - m_pressGlobal;
+			if (m_dragging || delta.manhattanLength() >= QApplication::startDragDistance()) {
+				m_dragging = true;
+				move(clampToVisibleScreen(m_startTopLeft + delta, size()));
+				event->accept();
+				return true;
+			}
+			return false;
+		}
+
+		if (event->button() == Qt::LeftButton && event->type() == QEvent::MouseButtonRelease && m_dragPressed) {
+			const bool wasDragging = m_dragging;
+			m_dragPressed = false;
+			m_dragging = false;
+			if (wasDragging) {
+				if (m_moved)
+					m_moved();
+				event->accept();
+				return true;
+			}
+			return false;
+		}
+
+		(void)fromButton;
+		return false;
+	}
+
+	QPushButton *m_button = nullptr;
+	std::function<void(bool)> m_muteChanged;
+	std::function<void()> m_closed;
+	std::function<void()> m_moved;
+	bool m_dragPressed = false;
+	bool m_dragging = false;
+	QPoint m_pressGlobal;
+	QPoint m_startTopLeft;
+};
 
 PresetDock::PresetDock(QWidget *parent) : QWidget(parent)
 {
 	buildUi();
 	refreshSceneList();
 	loadFromScene();
+	loadCompactOverlayState();
+	syncMuteToMeUi();
 }
 
 PresetDock::~PresetDock() = default;
@@ -103,6 +313,25 @@ void PresetDock::buildUi()
 	m_muteToMe->setText(m_muteToMe->isChecked() ? tr("Muted to you — click to hear again")
 						    : tr("Mute to me (stop hearing; keep recording)"));
 	root->addWidget(m_muteToMe);
+
+	m_showCompactOverlay = new QPushButton();
+	m_showCompactOverlay->setCheckable(true);
+	m_showCompactOverlay->setEnabled(obs_audio_monitoring_available());
+	m_showCompactOverlay->setToolTip(tr("<b>Compact mute overlay</b><br>Shows a small always-on-top control "
+					     "with only the Mute to me switch. Drag the compact control to "
+					     "place it over OBS."));
+	root->addWidget(m_showCompactOverlay);
+
+	m_compactOverlay = new CompactMuteOverlay(this);
+	m_compactOverlay->setMuteChangedCallback([this](bool checked) {
+		setMuteToMeFromUi(checked);
+	});
+	m_compactOverlay->setClosedCallback([this]() {
+		setCompactOverlayVisible(false, true);
+	});
+	m_compactOverlay->setMovedCallback([this]() {
+		saveCompactOverlayPosition();
+	});
 
 	{
 		auto *line = new QFrame();
@@ -363,6 +592,7 @@ void PresetDock::buildUi()
 	connect(m_copyFromCurrent, &QPushButton::clicked, this, &PresetDock::onCopyFromCurrent);
 	connect(m_applyNow, &QPushButton::clicked, this, &PresetDock::onApplyNow);
 	connect(m_muteToMe, &QPushButton::toggled, this, &PresetDock::onMuteToMeToggled);
+	connect(m_showCompactOverlay, &QPushButton::toggled, this, &PresetDock::onCompactOverlayToggled);
 }
 
 // ---------------------------------------------------------------------------
@@ -606,6 +836,124 @@ void PresetDock::updateModeLabel()
 	m_modeLabel->setText(tr("Current output mode: %1").arg(advanced ? "Advanced" : "Simple"));
 }
 
+void PresetDock::setMuteToMeFromUi(bool checked)
+{
+	if (m_syncingMuteUi)
+		return;
+
+	aro_set_mute_to_me(checked);
+	syncMuteToMeUi();
+}
+
+void PresetDock::syncMuteToMeUi()
+{
+	const bool active = aro_mute_to_me_active();
+	const bool available = obs_audio_monitoring_available();
+
+	m_syncingMuteUi = true;
+	{
+		const QSignalBlocker block(m_muteToMe);
+		m_muteToMe->setEnabled(available);
+		m_muteToMe->setChecked(active);
+		m_muteToMe->setText(active ? tr("Muted to you — click to hear again")
+					   : tr("Mute to me (stop hearing; keep recording)"));
+	}
+	if (m_showCompactOverlay)
+		m_showCompactOverlay->setEnabled(available);
+
+	if (m_compactOverlay) {
+		m_compactOverlay->setMuteEnabled(available);
+		m_compactOverlay->setMuteActive(active);
+	}
+	m_syncingMuteUi = false;
+}
+
+void PresetDock::setCompactOverlayVisible(bool visible, bool save)
+{
+	if (!m_compactOverlay || !m_showCompactOverlay)
+		return;
+
+	m_syncingOverlayUi = true;
+	{
+		const QSignalBlocker block(m_showCompactOverlay);
+		m_showCompactOverlay->setChecked(visible);
+		m_showCompactOverlay->setText(visible ? tr("Hide compact mute overlay")
+						      : tr("Show compact mute overlay"));
+	}
+	m_syncingOverlayUi = false;
+
+	if (visible) {
+		if (!m_compactOverlayHasStoredPosition) {
+			QRect anchor;
+			if (window())
+				anchor = window()->frameGeometry();
+			if (!anchor.isValid()) {
+				QScreen *screen = QGuiApplication::primaryScreen();
+				anchor = screen ? screen->availableGeometry() : QRect(40, 40, 800, 600);
+			}
+			m_compactOverlay->move(clampToVisibleScreen(anchor.topLeft() + QPoint(28, 96),
+								    m_compactOverlay->size()));
+		}
+
+		syncMuteToMeUi();
+		m_compactOverlay->show();
+		m_compactOverlay->raise();
+	} else {
+		m_compactOverlay->hide();
+	}
+
+	if (save) {
+		saveCompactOverlayVisible(visible);
+		saveCompactOverlayPosition();
+	}
+}
+
+void PresetDock::loadCompactOverlayState()
+{
+	if (!m_compactOverlay)
+		return;
+
+	config_t *cfg = obs_frontend_get_profile_config();
+	const bool visible = cfg ? config_get_bool(cfg, kUiConfigSection, kCompactOverlayVisibleKey) : false;
+	m_compactOverlayHasStoredPosition =
+		cfg && config_has_user_value(cfg, kUiConfigSection, kCompactOverlayXKey) &&
+		config_has_user_value(cfg, kUiConfigSection, kCompactOverlayYKey);
+
+	if (m_compactOverlayHasStoredPosition) {
+		const int x = (int)config_get_int(cfg, kUiConfigSection, kCompactOverlayXKey);
+		const int y = (int)config_get_int(cfg, kUiConfigSection, kCompactOverlayYKey);
+		m_compactOverlay->move(clampToVisibleScreen(QPoint(x, y), m_compactOverlay->size()));
+	}
+
+	setCompactOverlayVisible(visible, false);
+}
+
+void PresetDock::saveCompactOverlayVisible(bool visible)
+{
+	config_t *cfg = obs_frontend_get_profile_config();
+	if (!cfg)
+		return;
+
+	config_set_bool(cfg, kUiConfigSection, kCompactOverlayVisibleKey, visible);
+	config_save(cfg);
+}
+
+void PresetDock::saveCompactOverlayPosition()
+{
+	if (!m_compactOverlay)
+		return;
+
+	config_t *cfg = obs_frontend_get_profile_config();
+	if (!cfg)
+		return;
+
+	const QPoint pos = m_compactOverlay->frameGeometry().topLeft();
+	config_set_int(cfg, kUiConfigSection, kCompactOverlayXKey, pos.x());
+	config_set_int(cfg, kUiConfigSection, kCompactOverlayYKey, pos.y());
+	config_save(cfg);
+	m_compactOverlayHasStoredPosition = true;
+}
+
 // ---------------------------------------------------------------------------
 // Buttons
 // ---------------------------------------------------------------------------
@@ -716,17 +1064,15 @@ void PresetDock::onApplyNow()
 
 void PresetDock::onMuteToMeToggled(bool checked)
 {
-	aro_set_mute_to_me(checked);
+	setMuteToMeFromUi(checked);
+}
 
-	// Reflect the actual resulting state (set may be a no-op if monitoring is
-	// unavailable) and relabel for the next action.
-	const bool active = aro_mute_to_me_active();
-	if (active != checked) {
-		const QSignalBlocker block(m_muteToMe);
-		m_muteToMe->setChecked(active);
-	}
-	m_muteToMe->setText(active ? tr("Muted to you — click to hear again")
-				   : tr("Mute to me (stop hearing; keep recording)"));
+void PresetDock::onCompactOverlayToggled(bool checked)
+{
+	if (m_syncingOverlayUi)
+		return;
+
+	setCompactOverlayVisible(checked, true);
 }
 
 void PresetDock::showStatus(const QString &message)
